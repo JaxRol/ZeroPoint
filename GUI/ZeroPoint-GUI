@@ -9159,23 +9159,37 @@ do
             if Library.WatermarkConfig.ShowFPS then
                 table.insert(parts, _WMFPS .. " FPS")
             end
-            if Library.WatermarkConfig.ShowPing then
-                local pingValue = "?ms"
-                local ok2, result = pcall(function()
-                    local statsNet = game:GetService("Stats"):FindFirstChild("Network")
-                    if statsNet then
-                        local pingItem = statsNet:FindFirstChild("Data Ping")
-                        if pingItem then
-                            return math.floor(pingItem.Value)
-                        end
-                    end
-                    return nil
-                end)
-                if ok2 and result then
-                    pingValue = result .. "ms"
-                end
-                table.insert(parts, pingValue)
-            end
+			if Library.WatermarkConfig.ShowPing then
+				local pingValue = nil
+
+				local statsSuccess, statsResult = pcall(function()
+					local stats = game:GetService("Stats")
+					local network = stats:FindFirstChild("Network")
+					local serverStats = network and network:FindFirstChild("ServerStatsItem")
+					local dataPing = serverStats and serverStats:FindFirstChild("Data Ping")
+
+					if dataPing then
+						return dataPing:GetValue()
+					end
+				end)
+
+				if statsSuccess and typeof(statsResult) == "number" then
+					pingValue = statsResult
+				else
+					local networkSuccess, networkResult = pcall(function()
+						return lp:GetNetworkPing() * 1000
+					end)
+
+					if networkSuccess and typeof(networkResult) == "number" then
+						pingValue = networkResult
+					end
+				end
+
+				table.insert(
+					parts,
+					pingValue and (math.floor(pingValue + 0.5) .. "ms") or "?ms"
+				)
+			end
             local newText = table.concat(parts, "  |  ")
             if _WMLabel.Text ~= newText then
                 _WMLabel.Text = newText
