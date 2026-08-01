@@ -645,4 +645,4 @@ do
     end
     ThemeManager:BuildFolderTree()
 end
-getgenv().ObsidianThemeManager = ThemeManager
+getgenv().ThemeManager = ThemeManager
