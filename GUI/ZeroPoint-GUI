@@ -339,7 +339,7 @@ local Templates = {
         Default = 0,
         Min = 0,
         Max = 100,
-        Rounding = 0,
+        Rounding = 1,
         Prefix = "",
         Suffix = "",
         Callback = function() end,
@@ -499,12 +499,29 @@ end
 local function Trim(Text: string)
     return Text:match("^%s*(.-)%s*$")
 end
-local function Round(Value, Rounding)
-    assert(Rounding >= 0, "Invalid rounding number.")
-    if Rounding == 0 then
-        return math.floor(Value)
+local function Round(Value, Step, Minimum, Maximum)
+    Step = tonumber(Step) or 1
+    Minimum = tonumber(Minimum) or 0
+    Maximum = tonumber(Maximum)
+    Value = tonumber(Value) or Minimum
+
+    if Step <= 0 then
+        Step = 1
     end
-    return tonumber(string.format("%." .. Rounding .. "f", Value))
+
+    if Maximum then
+        Value = math.clamp(Value, Minimum, Maximum)
+    end
+
+    local StepCount = math.floor(((Value - Minimum) / Step) + 0.5)
+    local Rounded = Minimum + (StepCount * Step)
+
+    if Maximum and Rounded > Maximum then
+        Rounded = Minimum
+            + math.floor((Maximum - Minimum) / Step) * Step
+    end
+
+    return tonumber(string.format("%.10f", Rounded))
 end
 local function GetPlayers(ExcludeLocalPlayer: boolean?)
     local PlayerList = Players:GetPlayers()
@@ -3638,7 +3655,7 @@ do
         local Container = Groupbox.Container
         local Slider = {
             Text = Info.Text,
-            Value = Info.Default,
+            Value = Round(Info.Default, Info.Rounding, Info.Min, Info.Max),
             Min = Info.Min,
             Max = Info.Max,
             Prefix = Info.Prefix,
@@ -3761,20 +3778,33 @@ do
             Slider.Min = Value
             Slider:Display()
         end
-        function Slider:SetValue(Str)
-            if Slider.Disabled then
-                return
-            end
-            local Num = tonumber(Str)
-            if not Num or Num == Slider.Value then
-                return
-            end
-            Num = math.clamp(Num, Slider.Min, Slider.Max)
-            Slider.Value = Num
-            Slider:Display()
-            Library:SafeCallback(Slider.Callback, Slider.Value)
-            Library:SafeCallback(Slider.Changed, Slider.Value)
-        end
+		function Slider:SetValue(Str)
+			if Slider.Disabled then
+				return
+			end
+
+			local Num = tonumber(Str)
+
+			if not Num then
+				return
+			end
+
+			Num = Round(
+				Num,
+				Slider.Rounding,
+				Slider.Min,
+				Slider.Max
+			)
+
+			if Num == Slider.Value then
+				return
+			end
+
+			Slider.Value = Num
+			Slider:Display()
+			Library:SafeCallback(Slider.Callback, Slider.Value)
+			Library:SafeCallback(Slider.Changed, Slider.Value)
+		end
         function Slider:SetDisabled(Disabled: boolean)
             Slider.Disabled = Disabled
             if Slider.TooltipTable then
@@ -3824,7 +3854,12 @@ do
                 local Location = Mouse.X
                 local Scale = math.clamp((Location - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
                 local OldValue = Slider.Value
-                Slider.Value = Round(Slider.Min + ((Slider.Max - Slider.Min) * Scale), Slider.Rounding)
+                Slider.Value = Round(
+					Slider.Min + ((Slider.Max - Slider.Min) * Scale),
+					Slider.Rounding,
+					Slider.Min,
+					Slider.Max
+				)
                 Slider:Display()
                 if Slider.Value ~= OldValue then
                     Library:SafeCallback(Slider.Callback, Slider.Value)
@@ -9227,4 +9262,5 @@ do
         }
     end
 end
+
 getgenv().Library = Library
