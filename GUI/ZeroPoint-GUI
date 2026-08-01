@@ -9038,6 +9038,26 @@ do
     local _WMFPS = 0
     local _WMFrameCount = 0
     local _WMLastTime = tick()
+
+    Library:OnUnload(function()
+        if _WMConn and _WMConn.Connected then
+            _WMConn:Disconnect()
+        end
+
+        if _WMFPSConn and _WMFPSConn.Connected then
+            _WMFPSConn:Disconnect()
+        end
+
+        if _WMGui then
+            _WMGui:Destroy()
+        end
+
+        _WMGui = nil
+        _WMFrame = nil
+        _WMLabel = nil
+        _WMConn = nil
+        _WMFPSConn = nil
+    end)
     Library.WatermarkConfig = {
         ShowWatermark = false,
         ScriptName = "Script",
