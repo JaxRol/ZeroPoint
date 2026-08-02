@@ -172,6 +172,8 @@ local Library = {
     MobileButtonDraggingEnabled = true,
     MobileToggleButton = nil,
     UpdateMobileToggleButton = nil,
+    DragScrollingFrames = {},
+    DragScrollingInitialized = false,
     Signals = {},
     UnloadSignals = {},
     OriginalMinSize = Vector2.new(480, 360),
@@ -1365,6 +1367,155 @@ function Library:MakeDraggable(
     end
     return DragController
 end
+function Library:MakeDragScrollable(ScrollingFrame: ScrollingFrame)
+    assert(ScrollingFrame and ScrollingFrame:IsA("ScrollingFrame"), "Expected a ScrollingFrame")
+
+    if not table.find(Library.DragScrollingFrames, ScrollingFrame) then
+        table.insert(Library.DragScrollingFrames, ScrollingFrame)
+    end
+
+    if Library.DragScrollingInitialized then
+        return ScrollingFrame
+    end
+
+    Library.DragScrollingInitialized = true
+
+    local ActiveScrollingFrame = nil
+    local DragInput = nil
+    local StartY = 0
+    local StartCanvasY = 0
+
+    local function IsEffectivelyVisible(Gui: GuiObject): boolean
+        local Current = Gui
+
+        while Current and Current ~= ScreenGui do
+            if Current:IsA("GuiObject") and not Current.Visible then
+                return false
+            end
+
+            Current = Current.Parent
+        end
+
+        return Current == ScreenGui
+    end
+
+    local function IsInteractiveAtPosition(Frame: ScrollingFrame, Position: Vector2): boolean
+        local ScrollBarWidth = Frame.ScrollBarThickness
+        local RightEdge = Frame.AbsolutePosition.X + Frame.AbsoluteSize.X
+
+        if ScrollBarWidth > 0 and Position.X >= RightEdge - ScrollBarWidth - 2 then
+            return true
+        end
+
+        for _, Gui in Frame:GetDescendants() do
+            if
+                Gui:IsA("GuiObject")
+                and Gui.Visible
+                and IsEffectivelyVisible(Gui)
+                and Gui.AbsoluteSize.X > 0
+                and Gui.AbsoluteSize.Y > 0
+                and Library:MouseIsOverFrame(Gui, Position)
+                and (Gui:IsA("GuiButton") or Gui:IsA("TextBox") or Gui.Active)
+            then
+                return true
+            end
+        end
+
+        for _, Gui in ScreenGui:GetDescendants() do
+            if
+                Gui:IsA("GuiObject")
+                and not Gui:IsDescendantOf(Frame)
+                and not Frame:IsDescendantOf(Gui)
+                and Gui.Visible
+                and IsEffectivelyVisible(Gui)
+                and Gui.ZIndex >= Frame.ZIndex
+                and Gui.AbsoluteSize.X > 0
+                and Gui.AbsoluteSize.Y > 0
+                and Library:MouseIsOverFrame(Gui, Position)
+                and (Gui:IsA("GuiButton") or Gui:IsA("TextBox") or Gui.Active)
+            then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    Library:GiveSignal(UserInputService.InputBegan:Connect(function(Input: InputObject)
+        if
+            Input.UserInputType ~= Enum.UserInputType.MouseButton1
+            or not Library.IsRobloxFocused
+            or not Library.Toggled
+            or Library.ActiveDialog
+        then
+            return
+        end
+
+        for _, Frame in Library.DragScrollingFrames do
+            if
+                Frame.Parent
+                and Frame.ScrollingEnabled
+                and IsEffectivelyVisible(Frame)
+                and Library:MouseIsOverFrame(Frame, Input.Position)
+                and not IsInteractiveAtPosition(Frame, Input.Position)
+            then
+                local MaximumCanvasY = math.max(0, Frame.AbsoluteCanvasSize.Y - Frame.AbsoluteWindowSize.Y)
+
+                if MaximumCanvasY <= 0 then
+                    return
+                end
+
+                ActiveScrollingFrame = Frame
+                DragInput = Input
+                StartY = Input.Position.Y
+                StartCanvasY = Frame.CanvasPosition.Y
+                return
+            end
+        end
+    end))
+
+    Library:GiveSignal(UserInputService.InputChanged:Connect(function(Input: InputObject)
+        if
+            not ActiveScrollingFrame
+            or not DragInput
+            or Input.UserInputType ~= Enum.UserInputType.MouseMovement
+        then
+            return
+        end
+
+        if
+            not ActiveScrollingFrame.Parent
+            or not ActiveScrollingFrame.ScrollingEnabled
+            or not IsEffectivelyVisible(ActiveScrollingFrame)
+        then
+            ActiveScrollingFrame = nil
+            DragInput = nil
+            return
+        end
+
+        local MaximumCanvasY = math.max(
+            0,
+            ActiveScrollingFrame.AbsoluteCanvasSize.Y - ActiveScrollingFrame.AbsoluteWindowSize.Y
+        )
+        local DragDelta = Input.Position.Y - StartY
+
+        ActiveScrollingFrame.CanvasPosition = Vector2.new(
+            ActiveScrollingFrame.CanvasPosition.X,
+            math.clamp(StartCanvasY - DragDelta, 0, MaximumCanvasY)
+        )
+    end))
+
+    Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
+        if not DragInput or Input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        ActiveScrollingFrame = nil
+        DragInput = nil
+    end))
+
+    return ScrollingFrame
+end
 function Library:SetMobileButtonDragging(Enabled: boolean)
     assert(typeof(Enabled) == "boolean", "Expected boolean for Enabled, got: " .. typeof(Enabled))
     Library.MobileButtonDraggingEnabled = Enabled
@@ -1718,14 +1869,19 @@ function Library:AddContextMenu(
             BackgroundColor3 = "BackgroundColor",
             BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
             CanvasSize = UDim2.fromOffset(0, 0),
-            ScrollBarImageColor3 = "OutlineColor",
-            ScrollBarThickness = List == 2 and 2 or 0,
+            ScrollBarImageColor3 = "AccentColor",
+            ScrollBarImageTransparency = List == 2 and 0.2 or 1,
+            ScrollBarThickness = List == 2 and (Library.IsMobile and 4 or 6) or 0,
+            ScrollingDirection = Enum.ScrollingDirection.Y,
             Size = typeof(Size) == "function" and Size() or Size,
             TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
             Visible = false,
             ZIndex = 10,
             Parent = ParentGui,
         })
+        if List == 2 then
+            Library:MakeDragScrollable(Menu)
+        end
     else
         Menu = New("Frame", {
             BackgroundColor3 = "BackgroundColor",
@@ -6177,10 +6333,14 @@ function Library:CreateWindow(WindowInfo)
             BackgroundColor3 = "BackgroundColor",
             CanvasSize = UDim2.fromScale(0, 0),
             Position = UDim2.fromOffset(0, 49),
-            ScrollBarThickness = 0,
+            ScrollBarImageColor3 = "AccentColor",
+            ScrollBarImageTransparency = 0.2,
+            ScrollBarThickness = Library.IsMobile and 4 or 6,
+            ScrollingDirection = Enum.ScrollingDirection.Y,
             Size = UDim2.new(0, InitialLeftWidth, 1, -70),
             Parent = MainFrame,
         })
+        Library:MakeDragScrollable(Tabs)
         New("UIListLayout", {
             Parent = Tabs,
         })
@@ -6415,11 +6575,14 @@ function Library:CreateWindow(WindowInfo)
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
                 CanvasSize = UDim2.fromScale(0, 0),
-                ScrollBarImageTransparency = 1,
-                ScrollBarThickness = 0,
+                ScrollBarImageColor3 = "AccentColor",
+                ScrollBarImageTransparency = 0.2,
+                ScrollBarThickness = Library.IsMobile and 4 or 6,
+                ScrollingDirection = Enum.ScrollingDirection.Y,
                 Size = UDim2.new(0.5, -3, 1, 0),
                 Parent = TabContainer,
             })
+            Library:MakeDragScrollable(TabLeft)
             New("UIListLayout", {
                 Padding = UDim.new(0, 2),
                 Parent = TabLeft,
@@ -6449,11 +6612,14 @@ function Library:CreateWindow(WindowInfo)
                 BackgroundTransparency = 1,
                 CanvasSize = UDim2.fromScale(0, 0),
                 Position = UDim2.fromScale(1, 0),
-                ScrollBarImageTransparency = 1,
-                ScrollBarThickness = 0,
+                ScrollBarImageColor3 = "AccentColor",
+                ScrollBarImageTransparency = 0.2,
+                ScrollBarThickness = Library.IsMobile and 4 or 6,
+                ScrollingDirection = Enum.ScrollingDirection.Y,
                 Size = UDim2.new(0.5, -3, 1, 0),
                 Parent = TabContainer,
             })
+            Library:MakeDragScrollable(TabRight)
             New("UIListLayout", {
                 Padding = UDim.new(0, 2),
                 Parent = TabRight,
@@ -7217,12 +7383,15 @@ function Library:CreateWindow(WindowInfo)
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
                 CanvasSize = UDim2.fromScale(0, 0),
-                ScrollBarImageTransparency = 1,
-                ScrollBarThickness = 0,
+                ScrollBarImageColor3 = "AccentColor",
+                ScrollBarImageTransparency = 0.2,
+                ScrollBarThickness = Library.IsMobile and 4 or 6,
+                ScrollingDirection = Enum.ScrollingDirection.Y,
                 Size = UDim2.new(1, 0, 1, 0),
                 Visible = false,
                 Parent = Container,
             })
+            Library:MakeDragScrollable(TabContainer)
             New("UIListLayout", {
                 Padding = UDim.new(0, 2),
                 Parent = TabContainer,
@@ -7960,11 +8129,15 @@ function Library:CreateWindow(WindowInfo)
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
                 CanvasSize = UDim2.fromScale(0, 0),
-                ScrollBarThickness = 0,
+                ScrollBarImageColor3 = "AccentColor",
+                ScrollBarImageTransparency = 0.2,
+                ScrollBarThickness = Library.IsMobile and 4 or 6,
+                ScrollingDirection = Enum.ScrollingDirection.Y,
                 Size = UDim2.fromScale(1, 1),
                 Visible = false,
                 Parent = Container,
             })
+            Library:MakeDragScrollable(TabContainer)
             New("UIListLayout", {
                 HorizontalAlignment = Enum.HorizontalAlignment.Center,
                 Padding = UDim.new(0, 8),
