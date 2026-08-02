@@ -3419,13 +3419,21 @@ do
         function Toggle:SetDisabled(Disabled: boolean)
             local ShouldDisable = Disabled == true
             local ShouldTurnOff = ShouldDisable and not Toggle.DisabledCallbackApplied
+            local ShouldRestore = not ShouldDisable and Toggle.DisabledCallbackApplied
+
+            if ShouldTurnOff then
+                Toggle.DisabledRestoreValue = Toggle.Value
+            end
 
             Toggle.Disabled = ShouldDisable
             if ShouldTurnOff then
                 Toggle.DisabledCallbackApplied = true
                 Toggle:SetValue(false, true)
-            elseif not ShouldDisable then
+            elseif ShouldRestore then
+                local RestoreValue = Toggle.DisabledRestoreValue
                 Toggle.DisabledCallbackApplied = false
+                Toggle.DisabledRestoreValue = nil
+                Toggle:SetValue(RestoreValue, true)
             end
 
             if Toggle.TooltipTable then
@@ -3607,13 +3615,21 @@ do
         function Toggle:SetDisabled(Disabled: boolean)
             local ShouldDisable = Disabled == true
             local ShouldTurnOff = ShouldDisable and not Toggle.DisabledCallbackApplied
+            local ShouldRestore = not ShouldDisable and Toggle.DisabledCallbackApplied
+
+            if ShouldTurnOff then
+                Toggle.DisabledRestoreValue = Toggle.Value
+            end
 
             Toggle.Disabled = ShouldDisable
             if ShouldTurnOff then
                 Toggle.DisabledCallbackApplied = true
                 Toggle:SetValue(false, true)
-            elseif not ShouldDisable then
+            elseif ShouldRestore then
+                local RestoreValue = Toggle.DisabledRestoreValue
                 Toggle.DisabledCallbackApplied = false
+                Toggle.DisabledRestoreValue = nil
+                Toggle:SetValue(RestoreValue, true)
             end
 
             if Toggle.TooltipTable then
@@ -4638,13 +4654,31 @@ do
         function Dropdown:SetDisabled(Disabled: boolean)
             local ShouldDisable = Disabled == true
             local ShouldTurnOff = ShouldDisable and not Dropdown.DisabledCallbackApplied
+            local ShouldRestore = not ShouldDisable and Dropdown.DisabledCallbackApplied
+
+            if ShouldTurnOff then
+                if Info.Multi then
+                    local RestoreValue = {}
+                    for Value, Active in Dropdown.Value do
+                        if Active then
+                            RestoreValue[Value] = true
+                        end
+                    end
+                    Dropdown.DisabledRestoreValue = RestoreValue
+                else
+                    Dropdown.DisabledRestoreValue = Dropdown.Value
+                end
+            end
 
             Dropdown.Disabled = ShouldDisable
             if ShouldTurnOff then
                 Dropdown.DisabledCallbackApplied = true
                 Dropdown:SetValue(nil, false, true)
-            elseif not ShouldDisable then
+            elseif ShouldRestore then
+                local RestoreValue = Dropdown.DisabledRestoreValue
                 Dropdown.DisabledCallbackApplied = false
+                Dropdown.DisabledRestoreValue = nil
+                Dropdown:SetValue(RestoreValue, nil, true)
             end
 
             if Dropdown.TooltipTable then
