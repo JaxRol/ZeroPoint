@@ -3400,8 +3400,8 @@ do
         function Toggle:OnChanged(Func)
             Toggle.Changed = Func
         end
-        function Toggle:SetValue(Value)
-            if Toggle.Disabled then
+        function Toggle:SetValue(Value, Force)
+            if Toggle.Disabled and not Force then
                 return
             end
             Toggle.Value = Value
@@ -3417,7 +3417,17 @@ do
             Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
         function Toggle:SetDisabled(Disabled: boolean)
-            Toggle.Disabled = Disabled == true
+            local ShouldDisable = Disabled == true
+            local ShouldTurnOff = ShouldDisable and not Toggle.DisabledCallbackApplied
+
+            Toggle.Disabled = ShouldDisable
+            if ShouldTurnOff then
+                Toggle.DisabledCallbackApplied = true
+                Toggle:SetValue(false, true)
+            elseif not ShouldDisable then
+                Toggle.DisabledCallbackApplied = false
+            end
+
             if Toggle.TooltipTable then
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
@@ -3578,8 +3588,8 @@ do
         function Toggle:OnChanged(Func)
             Toggle.Changed = Func
         end
-        function Toggle:SetValue(Value)
-            if Toggle.Disabled then
+        function Toggle:SetValue(Value, Force)
+            if Toggle.Disabled and not Force then
                 return
             end
             Toggle.Value = Value
@@ -3595,7 +3605,17 @@ do
             Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
         function Toggle:SetDisabled(Disabled: boolean)
-            Toggle.Disabled = Disabled == true
+            local ShouldDisable = Disabled == true
+            local ShouldTurnOff = ShouldDisable and not Toggle.DisabledCallbackApplied
+
+            Toggle.Disabled = ShouldDisable
+            if ShouldTurnOff then
+                Toggle.DisabledCallbackApplied = true
+                Toggle:SetValue(false, true)
+            elseif not ShouldDisable then
+                Toggle.DisabledCallbackApplied = false
+            end
+
             if Toggle.TooltipTable then
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
@@ -4535,7 +4555,7 @@ do
             end
             Dropdown:RecalculateListSize(Count)
         end
-        function Dropdown:SetValue(Value)
+        function Dropdown:SetValue(Value, CallbackValue, Force)
             if Info.Multi then
                 local Table = {}
                 for Val, Active in Value or {} do
@@ -4557,10 +4577,14 @@ do
             for _, Button in Buttons do
                 Button:UpdateButton()
             end
-            if not Dropdown.Disabled then
+            if not Dropdown.Disabled or Force then
+                local FinalCallbackValue = CallbackValue
+                if CallbackValue == nil then
+                    FinalCallbackValue = Dropdown:GetCallbackValue()
+                end
                 Library:UpdateDependencyBoxes()
-                Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
-                Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
+                Library:SafeCallback(Dropdown.Callback, FinalCallbackValue)
+                Library:SafeCallback(Dropdown.Changed, FinalCallbackValue)
             end
         end
         function Dropdown:SetValues(Values)
@@ -4612,7 +4636,17 @@ do
             Dropdown:BuildDropdownList()
         end
         function Dropdown:SetDisabled(Disabled: boolean)
-            Dropdown.Disabled = Disabled == true
+            local ShouldDisable = Disabled == true
+            local ShouldTurnOff = ShouldDisable and not Dropdown.DisabledCallbackApplied
+
+            Dropdown.Disabled = ShouldDisable
+            if ShouldTurnOff then
+                Dropdown.DisabledCallbackApplied = true
+                Dropdown:SetValue(nil, false, true)
+            elseif not ShouldDisable then
+                Dropdown.DisabledCallbackApplied = false
+            end
+
             if Dropdown.TooltipTable then
                 Dropdown.TooltipTable.Disabled = Dropdown.Disabled
             end
@@ -4686,7 +4720,7 @@ do
         Options[Idx] = Dropdown
         Library:BindDisabledState(Dropdown, Info.Disabled)
 
-		if #Defaults > 0 then
+		if #Defaults > 0 and not Dropdown.Disabled then
 			Library:UpdateDependencyBoxes()
 			Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
 			Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
