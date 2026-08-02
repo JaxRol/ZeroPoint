@@ -4543,6 +4543,13 @@ do
         Dropdown.Default = Defaults
         Dropdown.DefaultValues = Dropdown.Values
         Options[Idx] = Dropdown
+
+		if #Defaults > 0 then
+			Library:UpdateDependencyBoxes()
+			Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
+			Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+		end
+
         return Dropdown
     end
     function Funcs:AddViewport(Idx, Info)
