@@ -1,4 +1,4 @@
--- This isn't my gui it's temporary https://github.com/Ali-lov3/Obsidian-UiLibs
+
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -1749,18 +1749,38 @@ New("UIStroke", {
     Color = "OutlineColor",
     Parent = TooltipLabel,
 })
-TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-    if Library.Unloaded then
-        return
-    end
-    local X, _ = Library:GetTextBounds(
-        TooltipLabel.Text,
-        TooltipLabel.FontFace,
-        TooltipLabel.TextSize,
-        (workspace.CurrentCamera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Library.DPIScale
-    )
-    TooltipLabel.Size = UDim2.fromOffset(X + 8)
-end)
+Library:GiveSignal(
+    TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+        if Library.Unloaded or not TooltipLabel.Parent then
+            return
+        end
+
+        local Camera = workspace.CurrentCamera
+
+        if not Camera then
+            return
+        end
+
+        local Scale = math.max(Library.DPIScale or 1, 0.01)
+        local MaxWidth = math.max(
+            1,
+            (Camera.ViewportSize.X - TooltipLabel.AbsolutePosition.X - 8) / Scale
+        )
+
+        local Success, X = pcall(function()
+            return Library:GetTextBounds(
+                TooltipLabel.Text or "",
+                TooltipLabel.FontFace,
+                TooltipLabel.TextSize,
+                MaxWidth
+            )
+        end)
+
+        if Success and typeof(X) == "number" then
+            TooltipLabel.Size = UDim2.fromOffset(X + 8, 0)
+        end
+    end)
+)
 local CurrentHoverInstance
 function Library:AddTooltip(InfoStr: string, DisabledInfoStr: string, HoverInstance: GuiObject)
     local TooltipTable = {
@@ -4246,7 +4266,8 @@ do
                 return SubButton
             end
             return Button
-        end}
+        end
+        local Buttons = {}
         function Dropdown:BuildDropdownList()
             local Values = Dropdown.Values
             local DisabledValues = Dropdown.DisabledValues
