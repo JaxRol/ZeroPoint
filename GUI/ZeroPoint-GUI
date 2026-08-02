@@ -9373,11 +9373,76 @@ do
     local _WMGui = nil
     local _WMFrame = nil
     local _WMLabel = nil
+    local _WMResetButton = nil
     local _WMConn = nil
     local _WMFPSConn = nil
+    local _WMPositionConn = nil
+    local _WMResetConn = nil
     local _WMFPS = 0
     local _WMFrameCount = 0
     local _WMLastTime = tick()
+    local _WMDefaultPosition = UDim2.new(0, 10, 0, 10)
+
+    local function EncodeWatermarkPosition(Position: UDim2): string
+        return string.format(
+            "%.6f,%.3f,%.6f,%.3f",
+            Position.X.Scale,
+            Position.X.Offset,
+            Position.Y.Scale,
+            Position.Y.Offset
+        )
+    end
+
+    local function DecodeWatermarkPosition(Value): UDim2?
+        if typeof(Value) == "UDim2" then
+            return Value
+        end
+
+        if typeof(Value) ~= "string" then
+            return nil
+        end
+
+        local XScale, XOffset, YScale, YOffset = Value:match(
+            "^%s*([%+%-]?[%d%.eE]+)%s*,%s*([%+%-]?[%d%.eE]+)%s*,%s*([%+%-]?[%d%.eE]+)%s*,%s*([%+%-]?[%d%.eE]+)%s*$"
+        )
+
+        XScale = tonumber(XScale)
+        XOffset = tonumber(XOffset)
+        YScale = tonumber(YScale)
+        YOffset = tonumber(YOffset)
+
+        if not XScale or not XOffset or not YScale or not YOffset then
+            return nil
+        end
+
+        return UDim2.new(XScale, XOffset, YScale, YOffset)
+    end
+
+    local WatermarkPositionOption = {
+        Type = "Input",
+        Value = EncodeWatermarkPosition(_WMDefaultPosition),
+        Default = EncodeWatermarkPosition(_WMDefaultPosition),
+    }
+
+    function WatermarkPositionOption:SetValue(Value)
+        local Position = DecodeWatermarkPosition(Value)
+        if not Position then
+            return
+        end
+
+        WatermarkPositionOption.Value = EncodeWatermarkPosition(Position)
+        Library.WatermarkConfig.Position = Position
+
+        if _WMFrame then
+            _WMFrame.Position = Position
+        end
+    end
+
+    function WatermarkPositionOption:RunChanged()
+        WatermarkPositionOption:SetValue(WatermarkPositionOption.Value)
+    end
+
+    Options.WatermarkPosition = WatermarkPositionOption
 
     Library:OnUnload(function()
         if _WMConn and _WMConn.Connected then
@@ -9388,6 +9453,14 @@ do
             _WMFPSConn:Disconnect()
         end
 
+        if _WMPositionConn and _WMPositionConn.Connected then
+            _WMPositionConn:Disconnect()
+        end
+
+        if _WMResetConn and _WMResetConn.Connected then
+            _WMResetConn:Disconnect()
+        end
+
         if _WMGui then
             _WMGui:Destroy()
         end
@@ -9395,8 +9468,11 @@ do
         _WMGui = nil
         _WMFrame = nil
         _WMLabel = nil
+        _WMResetButton = nil
         _WMConn = nil
         _WMFPSConn = nil
+        _WMPositionConn = nil
+        _WMResetConn = nil
     end)
     Library.WatermarkConfig = {
         ShowWatermark = false,
@@ -9407,7 +9483,13 @@ do
         TextColor = Color3.new(1, 1, 1),
         BackgroundColor = Color3.fromRGB(15, 15, 15),
         BackgroundTransparency = 0.3,
+        Position = _WMDefaultPosition,
     }
+
+    function Library:ResetWatermarkPosition()
+        WatermarkPositionOption:SetValue(_WMDefaultPosition)
+    end
+
     function Library:SetupWatermark(config)
         config = config or {}
         for k, v in pairs(config) do
@@ -9416,8 +9498,15 @@ do
         if _WMGui then _WMGui:Destroy() end
         if _WMConn then _WMConn:Disconnect() end
         if _WMFPSConn then _WMFPSConn:Disconnect() end
+        if _WMPositionConn then _WMPositionConn:Disconnect() end
+        if _WMResetConn then _WMResetConn:Disconnect() end
         local cfg = Library.WatermarkConfig
         local lp = Players.LocalPlayer
+        local InitialPosition = DecodeWatermarkPosition(cfg.Position)
+            or DecodeWatermarkPosition(WatermarkPositionOption.Value)
+            or _WMDefaultPosition
+        WatermarkPositionOption.Value = EncodeWatermarkPosition(InitialPosition)
+        cfg.Position = InitialPosition
         _WMGui = Instance.new("ScreenGui")
         _WMGui.Name = "LibraryWatermark"
         _WMGui.ResetOnSpawn = false
@@ -9435,7 +9524,8 @@ do
         _WMFrame.BackgroundColor3 = Library.Scheme.BackgroundColor
         _WMFrame.BackgroundTransparency = 0
         _WMFrame.BorderSizePixel = 0
-        _WMFrame.Position = UDim2.new(0, 10, 0, 10)
+        _WMFrame.Active = true
+        _WMFrame.Position = InitialPosition
         _WMFrame.Size = UDim2.new(0, 220, 0, 32)
         _WMFrame.Visible = cfg.ShowWatermark
         _WMFrame.Parent = _WMGui
@@ -9462,13 +9552,45 @@ do
         _WMLabel = Instance.new("TextLabel")
         _WMLabel.Name = "WatermarkLabel"
         _WMLabel.BackgroundTransparency = 1
-        _WMLabel.Size = UDim2.new(1, 0, 1, 0)
+        _WMLabel.Size = UDim2.new(1, -54, 1, 0)
         _WMLabel.Font = Enum.Font.GothamBold
-        _WMLabel.Text = cfg.ScriptName
+        _WMLabel.Text = ""
         _WMLabel.TextColor3 = Library.Scheme.FontColor
         _WMLabel.TextSize = 13
         _WMLabel.TextXAlignment = Enum.TextXAlignment.Left
         _WMLabel.Parent = _WMFrame
+        _WMResetButton = Instance.new("TextButton")
+        _WMResetButton.Name = "ResetPositionButton"
+        _WMResetButton.Active = true
+        _WMResetButton.AnchorPoint = Vector2.new(1, 0.5)
+        _WMResetButton.AutoButtonColor = true
+        _WMResetButton.BackgroundColor3 = Library.Scheme.MainColor
+        _WMResetButton.BorderSizePixel = 0
+        _WMResetButton.Font = Enum.Font.GothamBold
+        _WMResetButton.Position = UDim2.new(1, 0, 0.5, 0)
+        _WMResetButton.Size = UDim2.fromOffset(48, Library.IsMobile and 28 or 24)
+        _WMResetButton.Text = "Reset"
+        _WMResetButton.TextColor3 = Library.Scheme.FontColor
+        _WMResetButton.TextSize = Library.IsMobile and 12 or 11
+        _WMResetButton.ZIndex = 2
+        _WMResetButton.Parent = _WMFrame
+        local _wmResetCorner = Instance.new("UICorner")
+        _wmResetCorner.CornerRadius = UDim.new(0, 6)
+        _wmResetCorner.Parent = _WMResetButton
+        local _wmResetStroke = Instance.new("UIStroke")
+        _wmResetStroke.Color = Library.Scheme.OutlineColor
+        _wmResetStroke.Thickness = 1
+        _wmResetStroke.Parent = _WMResetButton
+
+        Library:MakeDraggable(_WMFrame, _WMFrame, true)
+
+        _WMPositionConn = _WMFrame:GetPropertyChangedSignal("Position"):Connect(function()
+            cfg.Position = _WMFrame.Position
+            WatermarkPositionOption.Value = EncodeWatermarkPosition(_WMFrame.Position)
+        end)
+        _WMResetConn = _WMResetButton.Activated:Connect(function()
+            Library:ResetWatermarkPosition()
+        end)
         _WMFPSConn = RunService.RenderStepped:Connect(function()
             _WMFrameCount += 1
             local now = tick()
@@ -9486,6 +9608,9 @@ do
             _WMFrame.Visible = true
             _WMFrame.BackgroundColor3 = Library.Scheme.BackgroundColor
             _wmStroke.Color = Library.Scheme.AccentColor
+            _WMResetButton.BackgroundColor3 = Library.Scheme.MainColor
+            _WMResetButton.TextColor3 = Library.Scheme.FontColor
+            _wmResetStroke.Color = Library.Scheme.OutlineColor
             _wmGradient.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Library.Scheme.AccentColor),
                 ColorSequenceKeypoint.new(0.15, Library.Scheme.MainColor),
@@ -9534,9 +9659,11 @@ do
             if _WMLabel.Text ~= newText then
                 _WMLabel.Text = newText
                 local size = TextService:GetTextSize(newText, 13, Enum.Font.GothamBold, Vector2.new(math.huge, math.huge))
-                _WMFrame.Size = UDim2.new(0, size.X + 24, 0, 32)
+                _WMFrame.Size = UDim2.new(0, size.X + 78, 0, Library.IsMobile and 40 or 32)
             end
         end)
+        Library:GiveSignal(_WMPositionConn)
+        Library:GiveSignal(_WMResetConn)
         Library:GiveSignal(_WMFPSConn)
         Library:GiveSignal(_WMConn)
         return {
@@ -9564,6 +9691,9 @@ do
             ShowName = function(_, v) Library.WatermarkConfig.ShowName = v end,
             ShowFPS = function(_, v) Library.WatermarkConfig.ShowFPS = v end,
             ShowPing = function(_, v) Library.WatermarkConfig.ShowPing = v end,
+            ResetPosition = function()
+                Library:ResetWatermarkPosition()
+            end,
         }
     end
 end
