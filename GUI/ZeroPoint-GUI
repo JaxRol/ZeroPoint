@@ -169,6 +169,9 @@ local Library = {
     ShowToggleFrameInKeybinds = true,
     NotifyOnError = false,
     CantDragForced = false,
+    MobileButtonDraggingEnabled = true,
+    MobileToggleButton = nil,
+    UpdateMobileToggleButton = nil,
     Signals = {},
     UnloadSignals = {},
     OriginalMinSize = Vector2.new(480, 360),
@@ -275,6 +278,7 @@ local Templates = {
         ToggleKeybind = Enum.KeyCode.RightControl,
         ShowMobileButtons = true,
         MobileButtonsSide = "Left",
+        MobileButtonDragging = true,
         UnlockMouseWhileOpen = true,
         EnableSidebarResize = false,
         EnableCompacting = true,
@@ -851,6 +855,9 @@ function Library:UpdateColorsUsingRegistry()
             ColorSequenceKeypoint.new(1, Library.Scheme.AccentColor),
         })
     end
+    if Library.UpdateMobileToggleButton then
+        Library.UpdateMobileToggleButton()
+    end
 end
 function Library:SetDPIScale(DPIScale: number)
     Library.DPIScale = DPIScale / 100
@@ -1208,21 +1215,41 @@ function Library:SafeCallback(Func: (...any) -> ...any, ...: any)
     end
     return table.unpack(Result, 2, Result.n)
 end
-function Library:MakeDraggable(UI: GuiObject, DragFrame: GuiObject, IgnoreToggled: boolean?, IsMainWindow: boolean?)
+function Library:MakeDraggable(
+    UI: GuiObject,
+    DragFrame: GuiObject,
+    IgnoreToggled: boolean?,
+    IsMainWindow: boolean?,
+    CanDrag: (() -> boolean)?
+)
     local StartPos
     local FramePos
     local Dragging = false
+    local DragDistance = 0
+    local LastDragEnded = 0
     local Changed
+    local DragController = {}
+    local function DraggingAllowed(): boolean
+        return not CanDrag or CanDrag()
+    end
     DragFrame.InputBegan:Connect(function(Input: InputObject)
-        if not IsClickInput(Input) or IsMainWindow and Library.CantDragForced then
+        if
+            not IsClickInput(Input)
+            or IsMainWindow and Library.CantDragForced
+            or not DraggingAllowed()
+        then
             return
         end
         StartPos = Input.Position
         FramePos = UI.Position
+        DragDistance = 0
         Dragging = true
         Changed = Input.Changed:Connect(function()
             if Input.UserInputState ~= Enum.UserInputState.End then
                 return
+            end
+            if DragDistance >= 6 then
+                LastDragEnded = tick()
             end
             Dragging = false
             if Changed and Changed.Connected then
@@ -1235,6 +1262,7 @@ function Library:MakeDraggable(UI: GuiObject, DragFrame: GuiObject, IgnoreToggle
         if
             (not IgnoreToggled and not Library.Toggled)
             or (IsMainWindow and Library.CantDragForced)
+            or not DraggingAllowed()
             or not (ScreenGui and ScreenGui.Parent)
         then
             Dragging = false
@@ -1246,10 +1274,24 @@ function Library:MakeDraggable(UI: GuiObject, DragFrame: GuiObject, IgnoreToggle
         end
         if Dragging and IsHoverInput(Input) then
             local Delta = Input.Position - StartPos
+            DragDistance = Delta.Magnitude
             UI.Position =
                 UDim2.new(FramePos.X.Scale, FramePos.X.Offset + Delta.X, FramePos.Y.Scale, FramePos.Y.Offset + Delta.Y)
         end
     end))
+    function DragController:ConsumeDrag(): boolean
+        if tick() - LastDragEnded <= 0.25 then
+            LastDragEnded = 0
+            return true
+        end
+        return false
+    end
+    return DragController
+end
+function Library:SetMobileButtonDragging(Enabled: boolean)
+    assert(typeof(Enabled) == "boolean", "Expected boolean for Enabled, got: " .. typeof(Enabled))
+    Library.MobileButtonDraggingEnabled = Enabled
+    return Enabled
 end
 function Library:MakeResizable(UI: GuiObject, DragFrame: GuiObject, Callback: () -> ()?)
     local StartPos
@@ -6033,6 +6075,9 @@ function Library:CreateWindow(WindowInfo)
     function Window:SetGlow(State: boolean)
         return Library:SetGlow(State)
     end
+    function Window:SetMobileButtonDragging(Enabled: boolean)
+        return Library:SetMobileButtonDragging(Enabled)
+    end
     function Window:SetFooter(footer: string)
         assert(typeof(footer) == "string", "Expected string for Footer, got: " .. typeof(footer))
         FooterLabel.Text = footer
@@ -8360,6 +8405,9 @@ function Library:CreateWindow(WindowInfo)
                 end
             end
         end
+        if Library.UpdateMobileToggleButton then
+            Library.UpdateMobileToggleButton()
+        end
     end
     function Library:Toggle(Value: boolean?)
         return Window:Toggle(Value)
@@ -8449,29 +8497,52 @@ function Library:CreateWindow(WindowInfo)
         local function CreateSquareMobileButton(IconName)
             local T = {}
             local Btn = New("TextButton", {
-                BackgroundColor3 = "BackgroundColor",
-                Position = UDim2.fromOffset(6, 6),
-                Size = UDim2.fromOffset(36, 36),
+                BackgroundColor3 = "MainColor",
+                Position = UDim2.fromOffset(8, 8),
+                Size = UDim2.fromOffset(40, 40),
                 Text = "",
-                ZIndex = 10,
+                ZIndex = 10001,
                 Parent = ScreenGui,
             })
+            table.insert(
+                Library.Corners,
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, math.min(WindowInfo.CornerRadius, 8)),
+                    Parent = Btn,
+                })
+            )
             Library:AddOutline(Btn)
+            local AccentLine = New("Frame", {
+                AnchorPoint = Vector2.new(0.5, 1),
+                BackgroundColor3 = "AccentColor",
+                Position = UDim2.fromScale(0.5, 1),
+                Size = UDim2.new(1, -10, 0, 2),
+                ZIndex = 10002,
+                Parent = Btn,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = AccentLine,
+            })
             local BtnIcon = New("ImageLabel", {
                 BackgroundTransparency = 1,
                 AnchorPoint = Vector2.new(0.5, 0.5),
+                ImageColor3 = "FontColor",
                 Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromOffset(22, 22),
-                ZIndex = 11,
+                Size = UDim2.fromOffset(21, 21),
+                ZIndex = 10002,
                 Parent = Btn,
             })
-            local IconData = Library:GetCustomIcon(IconName)
-            if IconData then
+            function T:SetIcon(NewIconName)
+                local IconData = Library:GetCustomIcon(NewIconName)
+                if not IconData then
+                    return
+                end
                 BtnIcon.Image = IconData.Url
                 BtnIcon.ImageRectOffset = IconData.ImageRectOffset
                 BtnIcon.ImageRectSize = IconData.ImageRectSize
             end
-            Library:MakeDraggable(Btn, Btn, true)
+            T:SetIcon(IconName)
             T.Button = Btn
             T.Icon = BtnIcon
             function T:SetIconColor(Color)
@@ -8479,13 +8550,34 @@ function Library:CreateWindow(WindowInfo)
             end
             return T
         end
-        ToggleButton = CreateSquareMobileButton("menu")
+        Library.MobileButtonDraggingEnabled = WindowInfo.MobileButtonDragging ~= false
+        ToggleButton = CreateSquareMobileButton(Library.Toggled and "eye" or "eye-off")
+        Library.MobileToggleButton = ToggleButton.Button
+        local ToggleButtonDrag = Library:MakeDraggable(ToggleButton.Button, ToggleButton.Button, true, false, function()
+            return Library.MobileButtonDraggingEnabled
+        end)
+        local function UpdateMobileToggleButton()
+            ToggleButton:SetIcon(Library.Toggled and "eye" or "eye-off")
+            ToggleButton:SetIconColor(
+                Library.Toggled and Library.Scheme.AccentColor or Library.Scheme.FontColor
+            )
+        end
+        Library.UpdateMobileToggleButton = UpdateMobileToggleButton
         ToggleButton.Button.MouseButton1Click:Connect(function()
+            if ToggleButtonDrag:ConsumeDrag() then
+                return
+            end
             Library:Toggle()
         end)
         LockButton = CreateSquareMobileButton("lock")
+        local LockButtonDrag = Library:MakeDraggable(LockButton.Button, LockButton.Button, true, false, function()
+            return Library.MobileButtonDraggingEnabled
+        end)
         LockButton:SetIconColor(Color3.fromRGB(220, 50, 50))
         LockButton.Button.MouseButton1Click:Connect(function()
+            if LockButtonDrag:ConsumeDrag() then
+                return
+            end
             Library.CantDragForced = not Library.CantDragForced
             if Library.CantDragForced then
                 LockButton:SetIconColor(Color3.fromRGB(0, 210, 80))
@@ -8494,17 +8586,18 @@ function Library:CreateWindow(WindowInfo)
             end
         end)
         if WindowInfo.MobileButtonsSide == "Right" then
-            ToggleButton.Button.Position = UDim2.new(1, -6, 0, 6)
+            ToggleButton.Button.Position = UDim2.new(1, -8, 0, 8)
             ToggleButton.Button.AnchorPoint = Vector2.new(1, 0)
-            LockButton.Button.Position = UDim2.new(1, -6, 0, 46)
+            LockButton.Button.Position = UDim2.new(1, -8, 0, 52)
             LockButton.Button.AnchorPoint = Vector2.new(1, 0)
         else
-            LockButton.Button.Position = UDim2.fromOffset(6, 46)
+            LockButton.Button.Position = UDim2.fromOffset(8, 52)
         end
         if WindowInfo.ShowMobileButtons == false then
             ToggleButton.Button.Visible = false
             LockButton.Button.Visible = false
         end
+        UpdateMobileToggleButton()
     end
     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         Library:UpdateSearch(SearchBox.Text)
