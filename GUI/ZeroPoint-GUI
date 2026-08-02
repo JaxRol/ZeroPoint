@@ -4147,15 +4147,28 @@ do
             Dropdown.Changed = Func
         end
         function Dropdown:GetActiveValues()
-            if Info.Multi then
-                local Table = {}
-                for Value, _ in Dropdown.Value do
-                    table.insert(Table, Value)
-                end
-                return Table
-            end
-            return Dropdown.Value and 1 or 0
-        end
+			if not Info.Multi then
+				return Dropdown.Value and 1 or 0
+			end
+
+			local ActiveValues = {}
+
+			for _, Value in Dropdown.Values do
+				if Dropdown.Value[Value] then
+					table.insert(ActiveValues, Value)
+				end
+			end
+
+			return ActiveValues
+		end
+
+		function Dropdown:GetCallbackValue()
+			if Info.Multi then
+				return Dropdown:GetActiveValues()
+			end
+
+			return Dropdown.Value
+		end
         local Buttons = {}
 
 		function Dropdown:AddButton(...)
@@ -4185,8 +4198,8 @@ do
                         Button:UpdateButton()
                     end
                     Library:UpdateDependencyBoxes()
-                    Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-                    Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+                    Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
+                    Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
                 end,
                 Tween = nil,
                 Type = "Button",
@@ -4254,8 +4267,8 @@ do
                             OtherButton:UpdateButton()
                         end
                         Library:UpdateDependencyBoxes()
-                        Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-                        Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+                        Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
+                        Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
                     end,
                     Tween = nil,
                     Type = "SubButton",
@@ -4370,7 +4383,10 @@ do
                 if not IsDisabled then
                     Button.MouseButton1Click:Connect(function()
                         local Try = not Selected
-                        if not (Dropdown:GetActiveValues() == 1 and not Try and not Info.AllowNull) then
+                        local ActiveValues = Dropdown:GetActiveValues()
+						local ActiveCount = Info.Multi and #ActiveValues or ActiveValues
+
+						if not (ActiveCount == 1 and not Try and not Info.AllowNull) then
                             Selected = Try
                             if Info.Multi then
                                 Dropdown.Value[Value] = Selected and true or nil
@@ -4384,8 +4400,8 @@ do
                         Table:UpdateButton()
                         Dropdown:Display()
                         Library:UpdateDependencyBoxes()
-                        Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-                        Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+                        Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
+                        Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
                     end)
                 end
                 Table:UpdateButton()
@@ -4418,8 +4434,8 @@ do
             end
             if not Dropdown.Disabled then
                 Library:UpdateDependencyBoxes()
-                Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-                Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+                Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
+                Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
             end
         end
         function Dropdown:SetValues(Values)
@@ -4546,8 +4562,8 @@ do
 
 		if #Defaults > 0 then
 			Library:UpdateDependencyBoxes()
-			Library:SafeCallback(Dropdown.Callback, Dropdown.Value)
-			Library:SafeCallback(Dropdown.Changed, Dropdown.Value)
+			Library:SafeCallback(Dropdown.Callback, Dropdown:GetCallbackValue())
+			Library:SafeCallback(Dropdown.Changed, Dropdown:GetCallbackValue())
 		end
 
         return Dropdown
