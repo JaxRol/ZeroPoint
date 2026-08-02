@@ -881,27 +881,79 @@ function Library:GiveSignal(Connection: RBXScriptConnection | RBXScriptSignal)
     end
     return Connection
 end
-function Library:GetDisabledState(Disabled: boolean | BoolValue): boolean
+local DisabledBindings = {}
+local DisabledPollConnection = nil
+
+function Library:GetDisabledState(Disabled): boolean
     if typeof(Disabled) == "Instance" and Disabled:IsA("BoolValue") then
         return Disabled.Value
     end
+
+    if typeof(Disabled) == "function" then
+        local Success, Value = pcall(Disabled)
+        return Success and Value == true
+    end
+
+    if typeof(Disabled) == "table" then
+        local Success, Value = pcall(function()
+            return Disabled.Value
+        end)
+        return Success and Value == true
+    end
+
     return Disabled == true
 end
-function Library:BindDisabledState(Control, Disabled: boolean | BoolValue)
+
+local function StartDisabledPoll()
+    if DisabledPollConnection and DisabledPollConnection.Connected then
+        return
+    end
+
+    DisabledPollConnection = Library:GiveSignal(RunService.RenderStepped:Connect(function()
+        for Index = #DisabledBindings, 1, -1 do
+            local Binding = DisabledBindings[Index]
+
+            if Library.Unloaded or not Binding.Active then
+                table.remove(DisabledBindings, Index)
+                continue
+            end
+
+            local Disabled = Library:GetDisabledState(Binding.Source)
+            if Binding.Control.Disabled ~= Disabled then
+                Binding.Control:SetDisabled(Disabled)
+            end
+        end
+    end))
+end
+
+function Library:BindDisabledState(Control, Disabled)
     if Control.DisabledConnection and Control.DisabledConnection.Connected then
         Control.DisabledConnection:Disconnect()
     end
+    if Control.DisabledBinding then
+        Control.DisabledBinding.Active = false
+    end
+
     Control.DisabledConnection = nil
-    Control.DisabledSource = nil
+    Control.DisabledBinding = nil
+    Control.DisabledSource = Disabled
 
     if typeof(Disabled) == "Instance" and Disabled:IsA("BoolValue") then
-        Control.DisabledSource = Disabled
         Control.DisabledConnection = Library:GiveSignal(Disabled:GetPropertyChangedSignal("Value"):Connect(function()
             if Library.Unloaded then
                 return
             end
             Control:SetDisabled(Disabled.Value)
         end))
+    elseif typeof(Disabled) == "function" or typeof(Disabled) == "table" then
+        local Binding = {
+            Active = true,
+            Control = Control,
+            Source = Disabled,
+        }
+        Control.DisabledBinding = Binding
+        table.insert(DisabledBindings, Binding)
+        StartDisabledPoll()
     end
 
     Control:SetDisabled(Library:GetDisabledState(Disabled))
