@@ -4228,6 +4228,12 @@ do
         Slider.Default = Slider.Value
         Options[Idx] = Slider
         Library:BindDisabledState(Slider, Info.Disabled)
+
+        if not Slider.Disabled then
+            Library:SafeCallback(Slider.Callback, Slider.Value)
+            Library:SafeCallback(Slider.Changed, Slider.Value)
+        end
+
         return Slider
     end
     function Funcs:AddDropdown(Idx, Info)
