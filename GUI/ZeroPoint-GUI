@@ -146,7 +146,6 @@ local Library = {
     Tabs = {},
     TabButtons = {},
     DependencyBoxes = {},
-    DisabledElements = {},
     KeybindFrame = nil,
     KeybindContainer = nil,
     KeybindToggles = {},
@@ -548,50 +547,6 @@ local function GetTeams()
     end)
     return TeamList
 end
-function Library:GetDisabledState(Disabled)
-    if typeof(Disabled) == "function" then
-        local Success, Result = pcall(Disabled)
-        return Success and Result and true or false
-    end
-    if typeof(Disabled) == "table" then
-        if Disabled.Type == "Toggle" then
-            return Disabled.Value == true
-        end
-        local Toggle = Disabled[1]
-        if typeof(Toggle) == "table" and Toggle.Type == "Toggle" then
-            local ExpectedValue = Disabled[2]
-            if ExpectedValue == nil then
-                ExpectedValue = true
-            end
-            return Toggle.Value == ExpectedValue
-        end
-    end
-    return Disabled and true or false
-end
-function Library:RegisterDisabledElement(Element, Disabled)
-    Element.DisabledSource = Disabled
-    if Element.DisabledListenerRegistered then
-        return
-    end
-    if
-        typeof(Disabled) == "function"
-        or (typeof(Disabled) == "table" and (Disabled.Type == "Toggle" or Disabled[1] ~= nil))
-    then
-        Element.DisabledListenerRegistered = true
-        table.insert(Library.DisabledElements, Element)
-    end
-end
-function Library:UpdateDisabledElements(ChangedToggle)
-    for _, Element in Library.DisabledElements do
-        local Disabled = Element.DisabledSource
-        local ListensToToggle = typeof(Disabled) == "function"
-            or Disabled == ChangedToggle
-            or (typeof(Disabled) == "table" and Disabled[1] == ChangedToggle)
-        if ListensToToggle and typeof(Element.SetDisabled) == "function" then
-            Element:SetDisabled(Disabled, true)
-        end
-    end
-end
 function Library:UpdateDependencyBoxes()
     for _, Depbox in Library.DependencyBoxes do
         Depbox:Update(true)
@@ -925,6 +880,31 @@ function Library:GiveSignal(Connection: RBXScriptConnection | RBXScriptSignal)
         table.insert(Library.Signals, Connection)
     end
     return Connection
+end
+function Library:GetDisabledState(Disabled: boolean | BoolValue): boolean
+    if typeof(Disabled) == "Instance" and Disabled:IsA("BoolValue") then
+        return Disabled.Value
+    end
+    return Disabled == true
+end
+function Library:BindDisabledState(Control, Disabled: boolean | BoolValue)
+    if Control.DisabledConnection and Control.DisabledConnection.Connected then
+        Control.DisabledConnection:Disconnect()
+    end
+    Control.DisabledConnection = nil
+    Control.DisabledSource = nil
+
+    if typeof(Disabled) == "Instance" and Disabled:IsA("BoolValue") then
+        Control.DisabledSource = Disabled
+        Control.DisabledConnection = Library:GiveSignal(Disabled:GetPropertyChangedSignal("Value"):Connect(function()
+            if Library.Unloaded then
+                return
+            end
+            Control:SetDisabled(Disabled.Value)
+        end))
+    end
+
+    Control:SetDisabled(Library:GetDisabledState(Disabled))
 end
 function IsValidCustomIcon(Icon: string)
     return typeof(Icon) == "string" and (Icon:match("rbxasset") or Icon:match("roblox%.com/asset/%?id=") or Icon:match("rbxthumb://type="))
@@ -3191,18 +3171,14 @@ do
                 Library.Registry[SubButton.Base].BackgroundColor3 = SubButton.Disabled and "BackgroundColor"
                     or "MainColor"
             end
-            function SubButton:SetDisabled(Disabled, FromListener)
-                if not FromListener then
-                    Library:RegisterDisabledElement(SubButton, Disabled)
-                end
-                SubButton.Disabled = Library:GetDisabledState(Disabled)
+            function SubButton:SetDisabled(Disabled: boolean)
+                SubButton.Disabled = Disabled == true
                 if SubButton.TooltipTable then
                     SubButton.TooltipTable.Disabled = SubButton.Disabled
                 end
                 SubButton.Base.Active = not SubButton.Disabled
                 SubButton:UpdateColors()
             end
-            Library:RegisterDisabledElement(SubButton, Info.Disabled)
             function SubButton:SetVisible(Visible: boolean)
                 SubButton.Visible = Visible
                 SubButton.Base.Visible = SubButton.Visible
@@ -3222,6 +3198,7 @@ do
                 Library.Registry[SubButton.Base].TextColor3 = "RedColor"
             end
             SubButton:UpdateColors()
+            Library:BindDisabledState(SubButton, Info.Disabled)
             if Info.Idx then
                 Buttons[Info.Idx] = SubButton
             else
@@ -3240,18 +3217,14 @@ do
             Button.Stroke.Transparency = Button.Disabled and 0.5 or 0
             Library.Registry[Button.Base].BackgroundColor3 = Button.Disabled and "BackgroundColor" or "MainColor"
         end
-        function Button:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Button, Disabled)
-            end
-            Button.Disabled = Library:GetDisabledState(Disabled)
+        function Button:SetDisabled(Disabled: boolean)
+            Button.Disabled = Disabled == true
             if Button.TooltipTable then
                 Button.TooltipTable.Disabled = Button.Disabled
             end
             Button.Base.Active = not Button.Disabled
             Button:UpdateColors()
         end
-        Library:RegisterDisabledElement(Button, Info.Disabled)
         function Button:SetVisible(Visible: boolean)
             Button.Visible = Visible
             Holder.Visible = Button.Visible
@@ -3270,6 +3243,7 @@ do
             Library.Registry[Button.Base].TextColor3 = "RedColor"
         end
         Button:UpdateColors()
+        Library:BindDisabledState(Button, Info.Disabled)
         Groupbox:Resize()
         Button.Holder = Holder
         table.insert(Groupbox.Elements, Button)
@@ -3386,16 +3360,12 @@ do
                     Addon:Update()
                 end
             end
-            Library:UpdateDisabledElements(Toggle)
             Library:UpdateDependencyBoxes()
             Library:SafeCallback(Toggle.Callback, Toggle.Value)
             Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
-        function Toggle:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Toggle, Disabled)
-            end
-            Toggle.Disabled = Library:GetDisabledState(Disabled)
+        function Toggle:SetDisabled(Disabled: boolean)
+            Toggle.Disabled = Disabled == true
             if Toggle.TooltipTable then
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
@@ -3407,7 +3377,6 @@ do
             Button.Active = not Toggle.Disabled
             Toggle:Display()
         end
-        Library:RegisterDisabledElement(Toggle, Info.Disabled)
         function Toggle:SetVisible(Visible: boolean)
             Toggle.Visible = Visible
             Button.Visible = Toggle.Visible
@@ -3440,7 +3409,7 @@ do
         table.insert(Groupbox.Elements, Toggle)
         Toggle.Default = Toggle.Value
         Toggles[Idx] = Toggle
-        Library:UpdateDisabledElements(Toggle)
+        Library:BindDisabledState(Toggle, Info.Disabled)
         return Toggle
     end
     function Funcs:AddToggle(Idx, Info)
@@ -3569,16 +3538,12 @@ do
                     Addon:Update()
                 end
             end
-            Library:UpdateDisabledElements(Toggle)
             Library:UpdateDependencyBoxes()
             Library:SafeCallback(Toggle.Callback, Toggle.Value)
             Library:SafeCallback(Toggle.Changed, Toggle.Value)
         end
-        function Toggle:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Toggle, Disabled)
-            end
-            Toggle.Disabled = Library:GetDisabledState(Disabled)
+        function Toggle:SetDisabled(Disabled: boolean)
+            Toggle.Disabled = Disabled == true
             if Toggle.TooltipTable then
                 Toggle.TooltipTable.Disabled = Toggle.Disabled
             end
@@ -3590,7 +3555,6 @@ do
             Button.Active = not Toggle.Disabled
             Toggle:Display()
         end
-        Library:RegisterDisabledElement(Toggle, Info.Disabled)
         function Toggle:SetVisible(Visible: boolean)
             Toggle.Visible = Visible
             Button.Visible = Toggle.Visible
@@ -3623,7 +3587,7 @@ do
         table.insert(Groupbox.Elements, Toggle)
         Toggle.Default = Toggle.Value
         Toggles[Idx] = Toggle
-        Library:UpdateDisabledElements(Toggle)
+        Library:BindDisabledState(Toggle, Info.Disabled)
         return Toggle
     end
     function Funcs:AddInput(Idx, Info)
@@ -3727,11 +3691,8 @@ do
                 Library:SafeCallback(Input.Changed, Input.Value)
             end
         end
-        function Input:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Input, Disabled)
-            end
-            Input.Disabled = Library:GetDisabledState(Disabled)
+        function Input:SetDisabled(Disabled: boolean)
+            Input.Disabled = Disabled == true
             if Input.TooltipTable then
                 Input.TooltipTable.Disabled = Input.Disabled
             end
@@ -3739,7 +3700,6 @@ do
             Box.TextEditable = not Input.Disabled
             Input:UpdateColors()
         end
-        Library:RegisterDisabledElement(Input, Info.Disabled)
         function Input:SetVisible(Visible: boolean)
             Input.Visible = Visible
             Holder.Visible = Input.Visible
@@ -3778,6 +3738,7 @@ do
             Input.Default = Input.EmptyReset
         end
         Options[Idx] = Input
+        Library:BindDisabledState(Input, Info.Disabled)
         return Input
     end
     function Funcs:AddSlider(Idx, Info)
@@ -3936,18 +3897,14 @@ do
 			Library:SafeCallback(Slider.Callback, Slider.Value)
 			Library:SafeCallback(Slider.Changed, Slider.Value)
 		end
-        function Slider:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Slider, Disabled)
-            end
-            Slider.Disabled = Library:GetDisabledState(Disabled)
+        function Slider:SetDisabled(Disabled: boolean)
+            Slider.Disabled = Disabled == true
             if Slider.TooltipTable then
                 Slider.TooltipTable.Disabled = Slider.Disabled
             end
             Bar.Active = not Slider.Disabled
             Slider:UpdateColors()
         end
-        Library:RegisterDisabledElement(Slider, Info.Disabled)
         function Slider:SetVisible(Visible: boolean)
             Slider.Visible = Visible
             Holder.Visible = Slider.Visible
@@ -4026,6 +3983,7 @@ do
         table.insert(Groupbox.Elements, Slider)
         Slider.Default = Slider.Value
         Options[Idx] = Slider
+        Library:BindDisabledState(Slider, Info.Disabled)
         return Slider
     end
     function Funcs:AddDropdown(Idx, Info)
@@ -4601,11 +4559,8 @@ do
             end
             Dropdown:BuildDropdownList()
         end
-        function Dropdown:SetDisabled(Disabled, FromListener)
-            if not FromListener then
-                Library:RegisterDisabledElement(Dropdown, Disabled)
-            end
-            Dropdown.Disabled = Library:GetDisabledState(Disabled)
+        function Dropdown:SetDisabled(Disabled: boolean)
+            Dropdown.Disabled = Disabled == true
             if Dropdown.TooltipTable then
                 Dropdown.TooltipTable.Disabled = Dropdown.Disabled
             end
@@ -4613,7 +4568,6 @@ do
             DisplayButton.Active = not Dropdown.Disabled
             Dropdown:UpdateColors()
         end
-        Library:RegisterDisabledElement(Dropdown, Info.Disabled)
         function Dropdown:SetVisible(Visible: boolean)
             Dropdown.Visible = Visible
             Holder.Visible = Dropdown.Visible
@@ -4678,6 +4632,7 @@ do
         Dropdown.Default = Defaults
         Dropdown.DefaultValues = Dropdown.Values
         Options[Idx] = Dropdown
+        Library:BindDisabledState(Dropdown, Info.Disabled)
 
 		if #Defaults > 0 then
 			Library:UpdateDependencyBoxes()
