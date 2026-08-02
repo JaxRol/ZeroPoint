@@ -1,4 +1,4 @@
-
+-- This isn't my gui it's temporary https://github.com/Ali-lov3/Obsidian-UiLibs
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -4045,12 +4045,27 @@ do
             end
         )
         Dropdown.Menu = MenuTable
-        function Dropdown:RecalculateListSize(Count)
-            local Y = math.clamp((Count or GetTableSize(Dropdown.Values)) * 21, 0, Info.MaxVisibleDropdownItems * 21)
-            MenuTable:SetSize(function()
-                return UDim2.fromOffset((DisplayContainer.AbsoluteSize.X / Library.DPIScale) + 1, Y)
-            end)
-        end
+       	function Dropdown:RecalculateListSize(Count)
+			local ItemCount =
+				Count or GetTableSize(Dropdown.Values)
+
+			local ItemsHeight = math.clamp(
+				ItemCount * 21,
+				0,
+				Info.MaxVisibleDropdownItems * 21
+			)
+
+			-- Space for the Select All/Deselect All buttons.
+			local MultiButtonHeight = Info.Multi and 29 or 0
+			local Y = ItemsHeight + MultiButtonHeight
+
+			MenuTable:SetSize(function()
+				return UDim2.fromOffset(
+					(DisplayContainer.AbsoluteSize.X / Library.DPIScale) + 1,
+					Y
+				)
+			end)
+		end
         function Dropdown:UpdateColors()
             if Library.Unloaded then
                 return
@@ -4121,7 +4136,9 @@ do
             end
             return Dropdown.Value and 1 or 0
         end
-        function Dropdown:AddButton(...)
+        local Buttons = {}
+
+		function Dropdown:AddButton(...)
             local function GetInfo(...)
                 local Info = {}
                 local First = select(1, ...)
@@ -4229,8 +4246,7 @@ do
                 return SubButton
             end
             return Button
-        end
-        local Buttons = {}
+        end}
         function Dropdown:BuildDropdownList()
             local Values = Dropdown.Values
             local DisabledValues = Dropdown.DisabledValues
