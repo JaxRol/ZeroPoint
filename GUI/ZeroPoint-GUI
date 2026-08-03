@@ -3636,6 +3636,13 @@ do
         Toggle.Default = Toggle.Value
         Toggles[Idx] = Toggle
         Library:BindDisabledState(Toggle, Info.Disabled)
+
+        if not Toggle.Disabled then
+            Library:UpdateDependencyBoxes()
+            Library:SafeCallback(Toggle.Callback, Toggle.Value)
+            Library:SafeCallback(Toggle.Changed, Toggle.Value)
+        end
+
         return Toggle
     end
     function Funcs:AddToggle(Idx, Info)
@@ -3832,6 +3839,13 @@ do
         Toggle.Default = Toggle.Value
         Toggles[Idx] = Toggle
         Library:BindDisabledState(Toggle, Info.Disabled)
+
+        if not Toggle.Disabled then
+            Library:UpdateDependencyBoxes()
+            Library:SafeCallback(Toggle.Callback, Toggle.Value)
+            Library:SafeCallback(Toggle.Changed, Toggle.Value)
+        end
+
         return Toggle
     end
     function Funcs:AddInput(Idx, Info)
