@@ -414,6 +414,9 @@ local Templates = {
     },
     ColorPicker = {
         Default = Color3.new(1, 1, 1),
+        Mode = "Static",
+        RainbowSpeed = 0.15,
+        BreathSpeed = 0.75,
         Callback = function() end,
         Changed = function() end,
     },
@@ -2715,15 +2718,33 @@ do
         Info = Library:Validate(Info, Templates.ColorPicker)
         local ParentObj = self
         local ToggleLabel = ParentObj.TextLabel
+        local AnimationModes = { "Static", "Rainbow", "Breath" }
+        local function NormalizeAnimationMode(Mode)
+            local RequestedMode = tostring(Mode or "Static"):lower()
+            for _, AnimationMode in AnimationModes do
+                if AnimationMode:lower() == RequestedMode then
+                    return AnimationMode
+                end
+            end
+            return "Static"
+        end
         local ColorPicker = {
             Value = Info.Default,
             Transparency = Info.Transparency or 0,
             Title = Info.Title,
             Callback = Info.Callback,
             Changed = Info.Changed,
+            Mode = NormalizeAnimationMode(Info.Mode),
+            RainbowSpeed = math.max(tonumber(Info.RainbowSpeed) or 0.15, 0),
+            BreathSpeed = math.max(tonumber(Info.BreathSpeed) or 0.75, 0),
+            AnimationTime = 0,
             Type = "ColorPicker",
         }
         ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib = ColorPicker.Value:ToHSV()
+        ColorPicker.BaseHue = ColorPicker.Hue
+        ColorPicker.BaseSat = ColorPicker.Sat
+        ColorPicker.BaseVib = ColorPicker.Vib
+        ColorPicker.RainbowStartHue = ColorPicker.Hue
         local Holder = New("TextButton", {
             BackgroundColor3 = ColorPicker.Value,
             Size = UDim2.fromOffset(18, 18),
@@ -2743,13 +2764,23 @@ do
             TileSize = UDim2.fromOffset(9, 9),
             Parent = Holder,
         })
+        local AnimationList
+        local AnimationArrow
         local ColorMenu = Library:AddContextMenu(
             Holder,
             UDim2.fromOffset(Info.Transparency and 256 or 234, 0),
             function()
                 return { 0.5, Holder.AbsoluteSize.Y + 1.5 }
             end,
-            1
+            1,
+            function(Active)
+                if not Active and AnimationList then
+                    AnimationList.Visible = false
+                    if AnimationArrow then
+                        AnimationArrow.Rotation = 0
+                    end
+                end
+            end
         )
         ColorMenu.List.Padding = UDim.new(0, 8)
         ColorPicker.ColorMenu = ColorMenu
@@ -2886,6 +2917,98 @@ do
             Color = "OutlineColor",
             Parent = RgbBox,
         })
+        local AnimationHolder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 21),
+            Parent = ColorMenu.Menu,
+        })
+        local AnimationButton = New("TextButton", {
+            BackgroundColor3 = "MainColor",
+            Size = UDim2.fromScale(1, 1),
+            Text = "Animation: " .. ColorPicker.Mode,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = AnimationHolder,
+        })
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, 8),
+            PaddingRight = UDim.new(0, 4),
+            Parent = AnimationButton,
+        })
+        New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = AnimationButton,
+        })
+        table.insert(Library.Corners, New("UICorner", {
+            CornerRadius = UDim.new(0, Library.CornerRadius),
+            Parent = AnimationButton,
+        }))
+        AnimationArrow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            BackgroundTransparency = 1,
+            Image = ArrowIcon and ArrowIcon.Url or "",
+            ImageColor3 = "FontColor",
+            ImageRectOffset = ArrowIcon and ArrowIcon.ImageRectOffset or Vector2.zero,
+            ImageRectSize = ArrowIcon and ArrowIcon.ImageRectSize or Vector2.zero,
+            ImageTransparency = 0.5,
+            Position = UDim2.fromScale(1, 0.5),
+            Size = UDim2.fromOffset(16, 16),
+            Parent = AnimationButton,
+        })
+        AnimationList = New("Frame", {
+            BackgroundColor3 = "MainColor",
+            Size = UDim2.new(1, 0, 0, #AnimationModes * 21),
+            Visible = false,
+            Parent = ColorMenu.Menu,
+        })
+        New("UIListLayout", {
+            Parent = AnimationList,
+        })
+        New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = AnimationList,
+        })
+        table.insert(Library.Corners, New("UICorner", {
+            CornerRadius = UDim.new(0, Library.CornerRadius),
+            Parent = AnimationList,
+        }))
+        local AnimationButtons = {}
+        for _, AnimationMode in AnimationModes do
+            local ModeButton = New("TextButton", {
+                BackgroundColor3 = "BackgroundColor",
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 21),
+                Text = AnimationMode,
+                TextSize = 14,
+                TextTransparency = 0.5,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = AnimationList,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, 8),
+                PaddingRight = UDim.new(0, 8),
+                Parent = ModeButton,
+            })
+            AnimationButtons[AnimationMode] = ModeButton
+            ModeButton.MouseButton1Click:Connect(function()
+                AnimationList.Visible = false
+                AnimationArrow.Rotation = 0
+                ColorPicker:SetMode(AnimationMode)
+            end)
+        end
+        local function UpdateAnimationDropdown()
+            AnimationButton.Text = "Animation: " .. ColorPicker.Mode
+            for _, AnimationMode in AnimationModes do
+                local ModeButton = AnimationButtons[AnimationMode]
+                local Selected = AnimationMode == ColorPicker.Mode
+                ModeButton.BackgroundTransparency = Selected and 0 or 1
+                ModeButton.TextTransparency = Selected and 0 or 0.5
+            end
+        end
+        AnimationButton.MouseButton1Click:Connect(function()
+            AnimationList.Visible = not AnimationList.Visible
+            AnimationArrow.Rotation = AnimationList.Visible and 180 or 0
+        end)
         local ContextMenu = Library:AddContextMenu(Holder, UDim2.fromOffset(93, 0), function()
             return { Holder.AbsoluteSize.X + 1.5, 0.5 }
         end, 1)
@@ -2953,6 +3076,11 @@ do
             }, ", ")
         end
         function ColorPicker:Update()
+            if ColorPicker.Mode == "Static" then
+                ColorPicker.BaseHue = ColorPicker.Hue
+                ColorPicker.BaseSat = ColorPicker.Sat
+                ColorPicker.BaseVib = ColorPicker.Vib
+            end
             ColorPicker:Display()
             Library:SafeCallback(ColorPicker.Callback, ColorPicker.Value)
             Library:SafeCallback(ColorPicker.Changed, ColorPicker.Value)
@@ -2960,24 +3088,68 @@ do
         function ColorPicker:OnChanged(Func)
             ColorPicker.Changed = Func
         end
+        function ColorPicker:SetMode(Mode, SkipColorCallback)
+            local NewMode = NormalizeAnimationMode(Mode)
+            if ColorPicker.Mode == NewMode then
+                UpdateAnimationDropdown()
+                return
+            end
+            ColorPicker.Mode = NewMode
+            ColorPicker.AnimationTime = 0
+            ColorPicker.RainbowStartHue = ColorPicker.Hue
+            if NewMode == "Static" or NewMode == "Breath" then
+                ColorPicker.BaseHue = ColorPicker.Hue
+                ColorPicker.BaseSat = ColorPicker.Sat
+                ColorPicker.BaseVib = ColorPicker.Vib
+            end
+            UpdateAnimationDropdown()
+            if SkipColorCallback then
+                ColorPicker:Display()
+            else
+                ColorPicker:Update()
+            end
+        end
         function ColorPicker:SetValue(HSV, Transparency)
             if typeof(HSV) == "Color3" then
                 ColorPicker:SetValueRGB(HSV, Transparency)
                 return
             end
+            ColorPicker:SetMode("Static", true)
             local Color = Color3.fromHSV(HSV[1], HSV[2], HSV[3])
             ColorPicker.Transparency = Info.Transparency and Transparency or 0
             ColorPicker:SetHSVFromRGB(Color)
             ColorPicker:Update()
         end
         function ColorPicker:SetValueRGB(Color, Transparency)
+            ColorPicker:SetMode("Static", true)
             ColorPicker.Transparency = Info.Transparency and Transparency or 0
             ColorPicker:SetHSVFromRGB(Color)
             ColorPicker:Update()
         end
+        Library:GiveSignal(RunService.RenderStepped:Connect(function(DeltaTime)
+            if Library.Unloaded or ColorPicker.Mode == "Static" then
+                return
+            end
+            ColorPicker.AnimationTime += DeltaTime
+            if ColorPicker.Mode == "Rainbow" then
+                ColorPicker.Hue = (ColorPicker.RainbowStartHue + ColorPicker.AnimationTime * ColorPicker.RainbowSpeed) % 1
+                ColorPicker.Sat = 1
+                ColorPicker.Vib = 1
+            elseif ColorPicker.Mode == "Breath" then
+                local Pulse = (math.cos(ColorPicker.AnimationTime * ColorPicker.BreathSpeed * math.pi * 2) + 1) / 2
+                ColorPicker.Hue = ColorPicker.BaseHue
+                ColorPicker.Sat = ColorPicker.BaseSat
+                ColorPicker.Vib = ColorPicker.BaseVib * (0.35 + Pulse * 0.65)
+            end
+            ColorPicker:Update()
+        end))
         Holder.MouseButton1Click:Connect(ColorMenu.Toggle)
         Holder.MouseButton2Click:Connect(ContextMenu.Toggle)
         SatVipMap.InputBegan:Connect(function(Input: InputObject)
+            if not IsDragInput(Input) then
+                return
+            end
+            ColorPicker:SetMode("Static", true)
             while IsDragInput(Input) do
                 local MinX = SatVipMap.AbsolutePosition.X
                 local MaxX = MinX + SatVipMap.AbsoluteSize.X
@@ -2996,6 +3168,10 @@ do
             end
         end)
         HueSelector.InputBegan:Connect(function(Input: InputObject)
+            if not IsDragInput(Input) then
+                return
+            end
+            ColorPicker:SetMode("Static", true)
             while IsDragInput(Input) do
                 local Min = HueSelector.AbsolutePosition.Y
                 local Max = Min + HueSelector.AbsoluteSize.Y
@@ -3027,6 +3203,7 @@ do
             if not Enter then
                 return
             end
+            ColorPicker:SetMode("Static", true)
             local Success, Color = pcall(Color3.fromHex, HueBox.Text)
             if Success and typeof(Color) == "Color3" then
                 ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib = Color:ToHSV()
@@ -3037,12 +3214,14 @@ do
             if not Enter then
                 return
             end
+            ColorPicker:SetMode("Static", true)
             local R, G, B = RgbBox.Text:match("(%d+),%s*(%d+),%s*(%d+)")
             if R and G and B then
                 ColorPicker:SetHSVFromRGB(Color3.fromRGB(R, G, B))
             end
             ColorPicker:Update()
         end)
+        UpdateAnimationDropdown()
         ColorPicker:Display()
         if ParentObj.Addons then
             table.insert(ParentObj.Addons, ColorPicker)
