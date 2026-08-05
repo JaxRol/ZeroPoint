@@ -5236,21 +5236,37 @@ do
             CurrentCamera = Viewport.Camera,
             Active = Viewport.Interactive,
         })
+        local function SetTabScrollingEnabled(Enabled)
+            local Tab = Groupbox.Tab
+
+            if not Tab then
+                return
+            end
+
+            if typeof(Tab.Sides) == "table" then
+                for _, Side in Tab.Sides do
+                    if Side and Side:IsA("ScrollingFrame") then
+                        Side.ScrollingEnabled = Enabled
+                    end
+                end
+
+                return
+            end
+
+            local TabContainer = Tab.Container
+
+            if TabContainer and TabContainer:IsA("ScrollingFrame") then
+                TabContainer.ScrollingEnabled = Enabled
+            end
+        end
         ViewportFrame.MouseEnter:Connect(function()
             if not Viewport.Interactive then
                 return
             end
-            for _, Side in Groupbox.Tab.Sides do
-                Side.ScrollingEnabled = false
-            end
+            SetTabScrollingEnabled(false)
         end)
         ViewportFrame.MouseLeave:Connect(function()
-            if not Viewport.Interactive then
-                return
-            end
-            for _, Side in Groupbox.Tab.Sides do
-                Side.ScrollingEnabled = true
-            end
+            SetTabScrollingEnabled(true)
         end)
         ViewportFrame.InputBegan:Connect(function(input)
             if not Viewport.Interactive then
@@ -5366,12 +5382,25 @@ do
             ViewportFrame.CurrentCamera = Camera
         end
         function Viewport:SetInteractive(Interactive: boolean)
-            Viewport.Interactive = Interactive
-            ViewportFrame.Active = Interactive
+            Viewport.Interactive = Interactive == true
+            ViewportFrame.Active = Viewport.Interactive
+
+            if not Viewport.Interactive then
+                Dragging = false
+                Pinching = false
+                SetTabScrollingEnabled(true)
+            end
         end
         function Viewport:SetVisible(Visible: boolean)
-            Viewport.Visible = Visible
+            Viewport.Visible = Visible == true
             Holder.Visible = Viewport.Visible
+
+            if not Viewport.Visible then
+                Dragging = false
+                Pinching = false
+                SetTabScrollingEnabled(true)
+            end
+
             Groupbox:Resize()
         end
         Groupbox:Resize()
@@ -6438,21 +6467,21 @@ function Library:CreateWindow(WindowInfo)
         })
         CurrentTabLabel = New("TextLabel", {
             BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 16),
             Text = "",
-            TextSize = 18,
+            TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = CurrentTabInfo,
         })
         CurrentTabDescription = New("TextLabel", {
             BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 22),
             Text = "",
             TextWrapped = true,
-            TextSize = 14,
+            TextSize = 11,
+            TextTruncate = Enum.TextTruncate.AtEnd,
             TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
             Parent = CurrentTabInfo,
         })
         SearchBox = New("TextBox", {
@@ -10116,4 +10145,3 @@ do
 end
 
 getgenv().Library = Library
-return Library
