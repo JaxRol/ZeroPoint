@@ -417,6 +417,7 @@ local Templates = {
         Mode = "Static",
         RainbowSpeed = 0.15,
         BreathSpeed = 0.75,
+        AnimationCallbackRate = 30,
         Callback = function() end,
         Changed = function() end,
     },
@@ -849,16 +850,22 @@ function Library:UpdateColorsUsingRegistry()
         for Property, Index in Properties do
             local SchemeValue = GetSchemeValue(Index)
             if SchemeValue or typeof(Index) == "function" then
-                Instance[Property] = SchemeValue or Index()
+                local NewValue = SchemeValue or Index()
+                if Instance[Property] ~= NewValue then
+                    Instance[Property] = NewValue
+                end
             end
         end
     end
     if Library.GradientColor then
-        Library.GradientColor.Color = ColorSequence.new({
+        local NewGradientColor = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Library.Scheme.AccentColor),
             ColorSequenceKeypoint.new(0.5, Library.Scheme.MainColor),
             ColorSequenceKeypoint.new(1, Library.Scheme.AccentColor),
         })
+        if Library.GradientColor.Color ~= NewGradientColor then
+            Library.GradientColor.Color = NewGradientColor
+        end
     end
     if Library.UpdateMobileToggleButton then
         Library.UpdateMobileToggleButton()
@@ -1910,12 +1917,39 @@ function Library:AddContextMenu(
         Menu = Menu,
         List = nil,
         Signal = nil,
+        SizeSignal = nil,
+        ViewportSignal = nil,
         Size = Size,
     }
     if List then
         Table.List = New("UIListLayout", {
             Parent = Menu,
         })
+    end
+    function Table:UpdatePosition()
+        if not Table.Active then
+            return
+        end
+        local MenuOffset
+        if typeof(Offset) == "function" then
+            MenuOffset = Offset()
+        else
+            MenuOffset = Offset
+        end
+        local X = math.floor(Holder.AbsolutePosition.X + MenuOffset[1])
+        local Y = math.floor(Holder.AbsolutePosition.Y + MenuOffset[2])
+        local ViewportSize = ParentGui.AbsoluteSize
+        if ViewportSize.X <= 0 or ViewportSize.Y <= 0 then
+            local Camera = workspace.CurrentCamera
+            ViewportSize = Camera and Camera.ViewportSize or ViewportSize
+        end
+        local Margin = 4
+        local MaxX = math.max(Margin, ViewportSize.X - Menu.AbsoluteSize.X - Margin)
+        local MaxY = math.max(Margin, ViewportSize.Y - Menu.AbsoluteSize.Y - Margin)
+        Menu.Position = UDim2.fromOffset(
+            math.clamp(X, Margin, MaxX),
+            math.clamp(Y, Margin, MaxY)
+        )
     end
     function Table:Open()
         if CurrentMenu == Table then
@@ -1925,35 +1959,15 @@ function Library:AddContextMenu(
         end
         CurrentMenu = Table
         Table.Active = true
-        if typeof(Offset) == "function" then
-            Menu.Position = UDim2.fromOffset(
-                math.floor(Holder.AbsolutePosition.X + Offset()[1]),
-                math.floor(Holder.AbsolutePosition.Y + Offset()[2])
-            )
-        else
-            Menu.Position = UDim2.fromOffset(
-                math.floor(Holder.AbsolutePosition.X + Offset[1]),
-                math.floor(Holder.AbsolutePosition.Y + Offset[2])
-            )
-        end
         Menu.Size = typeof(Table.Size) == "function" and Table.Size() or Table.Size
         if typeof(ActiveCallback) == "function" then
             Library:SafeCallback(ActiveCallback, true)
         end
         Menu.Visible = true
-        Table.Signal = Holder:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-            if typeof(Offset) == "function" then
-                Menu.Position = UDim2.fromOffset(
-                    math.floor(Holder.AbsolutePosition.X + Offset()[1]),
-                    math.floor(Holder.AbsolutePosition.Y + Offset()[2])
-                )
-            else
-                Menu.Position = UDim2.fromOffset(
-                    math.floor(Holder.AbsolutePosition.X + Offset[1]),
-                    math.floor(Holder.AbsolutePosition.Y + Offset[2])
-                )
-            end
-        end)
+        Table:UpdatePosition()
+        Table.Signal = Holder:GetPropertyChangedSignal("AbsolutePosition"):Connect(Table.UpdatePosition)
+        Table.SizeSignal = Menu:GetPropertyChangedSignal("AbsoluteSize"):Connect(Table.UpdatePosition)
+        Table.ViewportSignal = ParentGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(Table.UpdatePosition)
     end
     function Table:Close()
         if CurrentMenu ~= Table then
@@ -1963,6 +1977,14 @@ function Library:AddContextMenu(
         if Table.Signal then
             Table.Signal:Disconnect()
             Table.Signal = nil
+        end
+        if Table.SizeSignal then
+            Table.SizeSignal:Disconnect()
+            Table.SizeSignal = nil
+        end
+        if Table.ViewportSignal then
+            Table.ViewportSignal:Disconnect()
+            Table.ViewportSignal = nil
         end
         Table.Active = false
         CurrentMenu = nil
@@ -1980,6 +2002,7 @@ function Library:AddContextMenu(
     function Table:SetSize(Size)
         Table.Size = Size
         Menu.Size = typeof(Size) == "function" and Size() or Size
+        Table:UpdatePosition()
     end
     return Table
 end
@@ -2737,7 +2760,10 @@ do
             Mode = NormalizeAnimationMode(Info.Mode),
             RainbowSpeed = math.max(tonumber(Info.RainbowSpeed) or 0.15, 0),
             BreathSpeed = math.max(tonumber(Info.BreathSpeed) or 0.75, 0),
+            AnimationCallbackRate = math.max(tonumber(Info.AnimationCallbackRate) or 30, 1),
             AnimationTime = 0,
+            AnimationCallbackTime = 0,
+            CallbackRunning = false,
             Type = "ColorPicker",
         }
         ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib = ColorPicker.Value:ToHSV()
@@ -3075,15 +3101,26 @@ do
                 math.floor(ColorPicker.Value.B * 255),
             }, ", ")
         end
-        function ColorPicker:Update()
+        function ColorPicker:FireCallbacks()
+            if ColorPicker.CallbackRunning then
+                return
+            end
+            ColorPicker.CallbackRunning = true
+            local CallbackValue = ColorPicker.Value
+            Library:SafeCallback(ColorPicker.Callback, CallbackValue)
+            Library:SafeCallback(ColorPicker.Changed, CallbackValue)
+            ColorPicker.CallbackRunning = false
+        end
+        function ColorPicker:Update(SkipCallbacks)
             if ColorPicker.Mode == "Static" then
                 ColorPicker.BaseHue = ColorPicker.Hue
                 ColorPicker.BaseSat = ColorPicker.Sat
                 ColorPicker.BaseVib = ColorPicker.Vib
             end
             ColorPicker:Display()
-            Library:SafeCallback(ColorPicker.Callback, ColorPicker.Value)
-            Library:SafeCallback(ColorPicker.Changed, ColorPicker.Value)
+            if not SkipCallbacks then
+                ColorPicker:FireCallbacks()
+            end
         end
         function ColorPicker:OnChanged(Func)
             ColorPicker.Changed = Func
@@ -3096,6 +3133,7 @@ do
             end
             ColorPicker.Mode = NewMode
             ColorPicker.AnimationTime = 0
+            ColorPicker.AnimationCallbackTime = 0
             ColorPicker.RainbowStartHue = ColorPicker.Hue
             if NewMode == "Static" or NewMode == "Breath" then
                 ColorPicker.BaseHue = ColorPicker.Hue
@@ -3131,6 +3169,7 @@ do
                 return
             end
             ColorPicker.AnimationTime += DeltaTime
+            ColorPicker.AnimationCallbackTime += DeltaTime
             if ColorPicker.Mode == "Rainbow" then
                 ColorPicker.Hue = (ColorPicker.RainbowStartHue + ColorPicker.AnimationTime * ColorPicker.RainbowSpeed) % 1
                 ColorPicker.Sat = 1
@@ -3141,7 +3180,12 @@ do
                 ColorPicker.Sat = ColorPicker.BaseSat
                 ColorPicker.Vib = ColorPicker.BaseVib * (0.35 + Pulse * 0.65)
             end
-            ColorPicker:Update()
+            local CallbackInterval = 1 / ColorPicker.AnimationCallbackRate
+            local SkipCallbacks = ColorPicker.AnimationCallbackTime < CallbackInterval
+            if not SkipCallbacks then
+                ColorPicker.AnimationCallbackTime %= CallbackInterval
+            end
+            ColorPicker:Update(SkipCallbacks)
         end))
         Holder.MouseButton1Click:Connect(ColorMenu.Toggle)
         Holder.MouseButton2Click:Connect(ContextMenu.Toggle)
