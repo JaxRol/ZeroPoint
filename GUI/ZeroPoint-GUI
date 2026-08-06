@@ -622,31 +622,41 @@ local function ApplySearchToTab(Tab, Search)
     if not Tab then
         return
     end
+
     local HasVisible = false
+    local SubPageMatches = {}
+
     for _, Groupbox in Tab.Groupboxes do
         local VisibleElements = 0
+
         for _, ElementInfo in Groupbox.Elements do
             if ElementInfo.Type == "Divider" then
                 ElementInfo.Holder.Visible = false
                 continue
             elseif ElementInfo.SubButton then
                 local Visible = false
+
                 if ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
                     Visible = true
                 else
                     ElementInfo.Base.Visible = false
                 end
+
                 if ElementInfo.SubButton.Text:lower():match(Search) and ElementInfo.SubButton.Visible then
                     Visible = true
                 else
                     ElementInfo.SubButton.Base.Visible = false
                 end
+
                 ElementInfo.Holder.Visible = Visible
+
                 if Visible then
                     VisibleElements += 1
                 end
+
                 continue
             end
+
             if ElementInfo.Text and ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
                 ElementInfo.Holder.Visible = true
                 VisibleElements += 1
@@ -654,45 +664,62 @@ local function ApplySearchToTab(Tab, Search)
                 ElementInfo.Holder.Visible = false
             end
         end
+
         for _, Depbox in Groupbox.DependencyBoxes do
             if not Depbox.Visible then
                 continue
             end
+
             VisibleElements += CheckDepbox(Depbox, Search)
         end
+
         if VisibleElements > 0 then
             Groupbox:Resize()
             HasVisible = true
+
+            if Groupbox.SubPage then
+                SubPageMatches[Groupbox.SubPage] = (SubPageMatches[Groupbox.SubPage] or 0) + VisibleElements
+            end
         end
+
         Groupbox.BoxHolder.Visible = VisibleElements > 0
     end
+
     for _, Tabbox in Tab.Tabboxes do
         local VisibleTabs = 0
         local VisibleElements = {}
+
         for _, SubTab in Tabbox.Tabs do
             VisibleElements[SubTab] = 0
+
             for _, ElementInfo in SubTab.Elements do
                 if ElementInfo.Type == "Divider" then
                     ElementInfo.Holder.Visible = false
                     continue
                 elseif ElementInfo.SubButton then
                     local Visible = false
+
                     if ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
                         Visible = true
                     else
                         ElementInfo.Base.Visible = false
                     end
+
                     if ElementInfo.SubButton.Text:lower():match(Search) and ElementInfo.SubButton.Visible then
                         Visible = true
                     else
                         ElementInfo.SubButton.Base.Visible = false
                     end
+
                     ElementInfo.Holder.Visible = Visible
+
                     if Visible then
                         VisibleElements[SubTab] += 1
                     end
+
                     continue
                 end
+
                 if ElementInfo.Text and ElementInfo.Text:lower():match(Search) and ElementInfo.Visible then
                     ElementInfo.Holder.Visible = true
                     VisibleElements[SubTab] += 1
@@ -700,18 +727,23 @@ local function ApplySearchToTab(Tab, Search)
                     ElementInfo.Holder.Visible = false
                 end
             end
+
             for _, Depbox in SubTab.DependencyBoxes do
                 if not Depbox.Visible then
                     continue
                 end
+
                 VisibleElements[SubTab] += CheckDepbox(Depbox, Search)
             end
         end
+
         for SubTab, Visible in VisibleElements do
             SubTab.ButtonHolder.Visible = Visible > 0
+
             if Visible > 0 then
                 VisibleTabs += 1
                 HasVisible = true
+
                 if Tabbox.ActiveTab == SubTab then
                     SubTab:Resize()
                 elseif Tabbox.ActiveTab and VisibleElements[Tabbox.ActiveTab] == 0 then
@@ -719,52 +751,109 @@ local function ApplySearchToTab(Tab, Search)
                 end
             end
         end
+
+        if VisibleTabs > 0 and Tabbox.SubPage then
+            SubPageMatches[Tabbox.SubPage] = (SubPageMatches[Tabbox.SubPage] or 0) + VisibleTabs
+        end
+
         Tabbox.BoxHolder.Visible = VisibleTabs > 0
     end
+
+    if typeof(Tab.SubPages) == "table" and #Tab.SubPages > 0 then
+        local FirstVisibleSubPage = nil
+
+        for _, SubPage in Tab.SubPages do
+            local SubPageHasMatches = (SubPageMatches[SubPage] or 0) > 0
+
+            if SubPage.Button then
+                SubPage.Button.Visible = SubPage.Visible ~= false and SubPageHasMatches
+            end
+
+            if SubPageHasMatches and SubPage.Visible ~= false and not FirstVisibleSubPage then
+                FirstVisibleSubPage = SubPage
+            end
+        end
+
+        if FirstVisibleSubPage then
+            if not Tab.ActiveSubPage or (SubPageMatches[Tab.ActiveSubPage] or 0) <= 0 then
+                FirstVisibleSubPage:Show(true)
+            elseif Tab.ApplySubPageVisibility then
+                Tab:ApplySubPageVisibility(true)
+            end
+        elseif Tab.ApplySubPageVisibility then
+            Tab:ApplySubPageVisibility(true)
+        end
+    end
+
     return HasVisible
 end
+
 local function ResetTab(Tab)
     if not Tab then
         return
     end
+
     for _, Groupbox in Tab.Groupboxes do
         for _, ElementInfo in Groupbox.Elements do
             ElementInfo.Holder.Visible = typeof(ElementInfo.Visible) == "boolean" and ElementInfo.Visible or true
+
             if ElementInfo.SubButton then
                 ElementInfo.Base.Visible = ElementInfo.Visible
                 ElementInfo.SubButton.Base.Visible = ElementInfo.SubButton.Visible
             end
         end
+
         for _, Depbox in Groupbox.DependencyBoxes do
             if not Depbox.Visible then
                 continue
             end
+
             RestoreDepbox(Depbox)
         end
+
         Groupbox:Resize()
         Groupbox.BoxHolder.Visible = true
     end
+
     for _, Tabbox in Tab.Tabboxes do
         for _, SubTab in Tabbox.Tabs do
             for _, ElementInfo in SubTab.Elements do
                 ElementInfo.Holder.Visible = typeof(ElementInfo.Visible) == "boolean" and ElementInfo.Visible or true
+
                 if ElementInfo.SubButton then
                     ElementInfo.Base.Visible = ElementInfo.Visible
                     ElementInfo.SubButton.Base.Visible = ElementInfo.SubButton.Visible
                 end
             end
+
             for _, Depbox in SubTab.DependencyBoxes do
                 if not Depbox.Visible then
                     continue
                 end
+
                 RestoreDepbox(Depbox)
             end
+
             SubTab.ButtonHolder.Visible = true
         end
+
         if Tabbox.ActiveTab then
             Tabbox.ActiveTab:Resize()
         end
+
         Tabbox.BoxHolder.Visible = true
+    end
+
+    if typeof(Tab.SubPages) == "table" then
+        for _, SubPage in Tab.SubPages do
+            if SubPage.Button then
+                SubPage.Button.Visible = SubPage.Visible ~= false
+            end
+        end
+    end
+
+    if Tab.ApplySubPageVisibility then
+        Tab:ApplySubPageVisibility(false)
     end
 end
 function Library:UpdateSearch(SearchText)
@@ -6769,11 +6858,14 @@ function Library:CreateWindow(WindowInfo)
             Description = select(3, ...) or "No Description"
         end
         Icon = Icon or "file-question-mark"
+        local TabIconName = Icon
         local TabButton: TextButton
         local TabLabel
         local TabDecoration
         local TabIcon
         local TabContainer
+        local SubPageBar
+        local SubPageDivider
         local TabLeft
         local TabRight
         Icon = if Icon == "file-question-mark" then FileQuestionMarkIcon else Library:GetCustomIcon(Icon)
@@ -6843,6 +6935,33 @@ function Library:CreateWindow(WindowInfo)
                 Visible = false,
                 Parent = Container,
             })
+            SubPageBar = New("ScrollingFrame", {
+                AutomaticCanvasSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                CanvasSize = UDim2.fromScale(0, 0),
+                Position = UDim2.fromOffset(2, 2),
+                ScrollBarThickness = 0,
+                ScrollingDirection = Enum.ScrollingDirection.X,
+                Size = UDim2.new(1, -4, 0, 36),
+                Visible = false,
+                Parent = TabContainer,
+            })
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                Padding = UDim.new(0, 6),
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Parent = SubPageBar,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, 2),
+                PaddingRight = UDim.new(0, 2),
+                Parent = SubPageBar,
+            })
+            SubPageDivider = Library:MakeLine(TabContainer, {
+                Position = UDim2.fromOffset(0, 40),
+                Size = UDim2.new(1, 0, 0, 1),
+            })
+            SubPageDivider.Visible = false
             TabLeft = New("ScrollingFrame", {
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
@@ -6999,6 +7118,11 @@ function Library:CreateWindow(WindowInfo)
             Groupboxes = {},
             Tabboxes = {},
             DependencyGroupboxes = {},
+            SubPages = {},
+            SubPagesByName = {},
+            ActiveSubPage = nil,
+            DefaultSubPage = nil,
+            CurrentSubPage = nil,
             Description = Description,
             Sides = {
                 TabLeft,
@@ -7012,6 +7136,386 @@ function Library:CreateWindow(WindowInfo)
                 Text = "",
             },
         }
+        local function GetUniqueSubPageName(PageName)
+            local BaseName = tostring(PageName or "Page")
+            local UniqueName = BaseName
+            local Index = 2
+
+            while Tab.SubPagesByName[UniqueName] do
+                UniqueName = string.format("%s %d", BaseName, Index)
+                Index += 1
+            end
+
+            return UniqueName
+        end
+
+        local function UpdateSubPageBarVisibility()
+            local VisiblePages = 0
+
+            for _, SubPage in Tab.SubPages do
+                if SubPage.Visible ~= false then
+                    VisiblePages += 1
+                end
+            end
+
+            local ShouldShow = VisiblePages > 1
+            SubPageBar.Visible = ShouldShow
+            SubPageDivider.Visible = ShouldShow
+            Tab:RefreshSides()
+        end
+
+        local function ConfigureSubPage(SubPage, Info)
+            SubPage.Name = GetUniqueSubPageName(Info.Name or SubPage.Name or "Page")
+            SubPage.Description = Info.Description or SubPage.Description or "No Description"
+            SubPage.IconName = Info.Icon or Info.IconName or SubPage.IconName or "layout-grid"
+            SubPage.Visible = Info.Visible ~= false
+            SubPage.LeftCanvasPosition = SubPage.LeftCanvasPosition or Vector2.zero
+            SubPage.RightCanvasPosition = SubPage.RightCanvasPosition or Vector2.zero
+
+            local PageIcon = Library:GetCustomIcon(SubPage.IconName) or FileQuestionMarkIcon
+            local Button = New("TextButton", {
+                BackgroundColor3 = "AccentColor",
+                BackgroundTransparency = 1,
+                Size = UDim2.fromOffset(34, 34),
+                Text = "",
+                Visible = SubPage.Visible,
+                Parent = SubPageBar,
+            })
+            table.insert(
+                Library.Corners,
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, math.min(WindowInfo.CornerRadius, 6)),
+                    Parent = Button,
+                })
+            )
+            local ButtonIcon = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = PageIcon and PageIcon.Url or "",
+                ImageColor3 = PageIcon and PageIcon.Custom and "WhiteColor" or "AccentColor",
+                ImageRectOffset = PageIcon and PageIcon.ImageRectOffset or Vector2.zero,
+                ImageRectSize = PageIcon and PageIcon.ImageRectSize or Vector2.zero,
+                ImageTransparency = 0.5,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(20, 20),
+                Parent = Button,
+            })
+            local Selection = New("Frame", {
+                AnchorPoint = Vector2.new(0.5, 1),
+                BackgroundColor3 = "AccentColor",
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0.5, 0, 1, 0),
+                Size = UDim2.new(0.55, 0, 0, 2),
+                Parent = Button,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = Selection,
+            })
+
+            SubPage.Button = Button
+            SubPage.ButtonIcon = ButtonIcon
+            SubPage.Selection = Selection
+
+            function SubPage:UpdateButton(Instant)
+                local Active = Tab.ActiveSubPage == SubPage
+                local ButtonTransparency = Active and 0.85 or 1
+                local IconTransparency = Active and 0 or 0.5
+                local SelectionTransparency = Active and 0 or 1
+
+                if Instant then
+                    Button.BackgroundTransparency = ButtonTransparency
+                    ButtonIcon.ImageTransparency = IconTransparency
+                    Selection.BackgroundTransparency = SelectionTransparency
+                    return
+                end
+
+                TweenService:Create(Button, Library.TweenInfo, {
+                    BackgroundTransparency = ButtonTransparency,
+                }):Play()
+                TweenService:Create(ButtonIcon, Library.TweenInfo, {
+                    ImageTransparency = IconTransparency,
+                }):Play()
+                TweenService:Create(Selection, Library.TweenInfo, {
+                    BackgroundTransparency = SelectionTransparency,
+                }):Play()
+            end
+
+            function SubPage:Show(SkipSearchUpdate)
+                if SubPage.Visible == false then
+                    return
+                end
+
+                if Tab.ActiveSubPage and Tab.ActiveSubPage ~= SubPage then
+                    Tab.ActiveSubPage.LeftCanvasPosition = TabLeft.CanvasPosition
+                    Tab.ActiveSubPage.RightCanvasPosition = TabRight.CanvasPosition
+                end
+
+                Tab.ActiveSubPage = SubPage
+
+                for _, OtherSubPage in Tab.SubPages do
+                    if OtherSubPage.UpdateButton then
+                        OtherSubPage:UpdateButton(false)
+                    end
+                end
+
+                Tab:ApplySubPageVisibility(Library.Searching)
+                TabLeft.CanvasPosition = SubPage.LeftCanvasPosition
+                TabRight.CanvasPosition = SubPage.RightCanvasPosition
+
+                if Library.ActiveTab == Tab then
+                    Tab:UpdateDisplayedInfo()
+                end
+
+                if Library.Searching and not SkipSearchUpdate then
+                    Library:UpdateSearch(Library.SearchText)
+                end
+            end
+
+            function SubPage:SetVisible(Visible)
+                SubPage.Visible = Visible == true
+                Button.Visible = SubPage.Visible
+
+                if not SubPage.Visible and Tab.ActiveSubPage == SubPage then
+                    local ReplacementSubPage = nil
+
+                    for _, OtherSubPage in Tab.SubPages do
+                        if OtherSubPage ~= SubPage and OtherSubPage.Visible ~= false then
+                            ReplacementSubPage = OtherSubPage
+                            break
+                        end
+                    end
+
+                    if ReplacementSubPage then
+                        ReplacementSubPage:Show(true)
+                    else
+                        Tab.ActiveSubPage = nil
+                        Tab:ApplySubPageVisibility(false)
+                    end
+                end
+
+                UpdateSubPageBarVisibility()
+
+                if Library.ActiveTab == Tab then
+                    Tab:UpdateDisplayedInfo()
+                end
+            end
+
+            function SubPage:SetIcon(IconName)
+                local NewIcon = Library:GetCustomIcon(IconName)
+
+                if not NewIcon then
+                    return false
+                end
+
+                SubPage.IconName = IconName
+                ButtonIcon.Image = NewIcon.Url
+                ButtonIcon.ImageColor3 = NewIcon.Custom and Library.Scheme.WhiteColor or Library.Scheme.AccentColor
+
+                if Library.Registry[ButtonIcon] then
+                    Library.Registry[ButtonIcon].ImageColor3 = NewIcon.Custom and "WhiteColor" or "AccentColor"
+                end
+
+                ButtonIcon.ImageRectOffset = NewIcon.ImageRectOffset
+                ButtonIcon.ImageRectSize = NewIcon.ImageRectSize
+                return true
+            end
+
+            function SubPage:AddGroupbox(GroupboxInfo)
+                GroupboxInfo = table.clone(GroupboxInfo)
+                GroupboxInfo.Side = GroupboxInfo.Side or 1
+                GroupboxInfo.SubPage = SubPage
+                return Tab:AddGroupbox(GroupboxInfo)
+            end
+
+            function SubPage:AddLeftGroupbox(GroupboxName, IconName)
+                return SubPage:AddGroupbox({
+                    Side = 1,
+                    Name = GroupboxName,
+                    IconName = IconName,
+                })
+            end
+
+            function SubPage:AddRightGroupbox(GroupboxName, IconName)
+                return SubPage:AddGroupbox({
+                    Side = 2,
+                    Name = GroupboxName,
+                    IconName = IconName,
+                })
+            end
+
+            function SubPage:AddTabbox(TabboxInfo)
+                if typeof(TabboxInfo) ~= "table" then
+                    TabboxInfo = {
+                        Name = TabboxInfo,
+                    }
+                else
+                    TabboxInfo = table.clone(TabboxInfo)
+                end
+
+                TabboxInfo.Side = TabboxInfo.Side or 1
+                TabboxInfo.SubPage = SubPage
+                return Tab:AddTabbox(TabboxInfo)
+            end
+
+            function SubPage:AddLeftTabbox(TabboxName)
+                return SubPage:AddTabbox({
+                    Side = 1,
+                    Name = TabboxName,
+                })
+            end
+
+            function SubPage:AddRightTabbox(TabboxName)
+                return SubPage:AddTabbox({
+                    Side = 2,
+                    Name = TabboxName,
+                })
+            end
+
+            Button.MouseEnter:Connect(function()
+                if Tab.ActiveSubPage ~= SubPage then
+                    TweenService:Create(ButtonIcon, Library.TweenInfo, {
+                        ImageTransparency = 0.2,
+                    }):Play()
+                end
+
+                Library:AddTooltip(SubPage.Name, SubPage.Description, Button)
+            end)
+            Button.MouseLeave:Connect(function()
+                SubPage:UpdateButton(false)
+            end)
+            Button.MouseButton1Click:Connect(function()
+                SubPage:Show(false)
+            end)
+
+            Tab.SubPagesByName[SubPage.Name] = SubPage
+            SubPage:UpdateButton(true)
+            return SubPage
+        end
+
+        local DefaultSubPage = {
+            Name = Name,
+            Description = Description,
+            IconName = TabIconName,
+            Visible = true,
+            IsDefault = true,
+            LeftCanvasPosition = Vector2.zero,
+            RightCanvasPosition = Vector2.zero,
+        }
+        Tab.DefaultSubPage = DefaultSubPage
+        Tab.ActiveSubPage = DefaultSubPage
+        Tab.CurrentSubPage = DefaultSubPage
+        table.insert(Tab.SubPages, DefaultSubPage)
+
+        function Tab:UpdateDisplayedInfo()
+            if SubPageBar.Visible and Tab.ActiveSubPage then
+                Window:ShowTabInfo(Tab.ActiveSubPage.Name, Tab.ActiveSubPage.Description)
+            else
+                Window:ShowTabInfo(Name, Description)
+            end
+        end
+
+        function Tab:ApplySubPageVisibility(PreserveSearchVisibility)
+            local ActiveSubPage = Tab.ActiveSubPage
+
+            for _, Groupbox in Tab.Groupboxes do
+                local IsActiveSubPage = ActiveSubPage and (not Groupbox.SubPage or Groupbox.SubPage == ActiveSubPage)
+
+                if not IsActiveSubPage then
+                    Groupbox.BoxHolder.Visible = false
+                elseif not PreserveSearchVisibility then
+                    Groupbox.BoxHolder.Visible = true
+                end
+            end
+
+            for _, Tabbox in Tab.Tabboxes do
+                local IsActiveSubPage = ActiveSubPage and (not Tabbox.SubPage or Tabbox.SubPage == ActiveSubPage)
+
+                if not IsActiveSubPage then
+                    Tabbox.BoxHolder.Visible = false
+                elseif not PreserveSearchVisibility then
+                    Tabbox.BoxHolder.Visible = true
+                end
+            end
+        end
+
+        function Tab:AddSubPage(...)
+            local Info
+
+            if select("#", ...) == 1 and typeof(select(1, ...)) == "table" then
+                Info = table.clone(select(1, ...))
+            else
+                Info = {
+                    Name = select(1, ...) or "Page",
+                    Icon = select(2, ...),
+                    Description = select(3, ...) or "No Description",
+                }
+            end
+
+            local SubPage
+
+            if not DefaultSubPage.Button then
+                SubPage = DefaultSubPage
+                SubPage.IsDefault = true
+            else
+                SubPage = {
+                    IsDefault = false,
+                    Visible = true,
+                    LeftCanvasPosition = Vector2.zero,
+                    RightCanvasPosition = Vector2.zero,
+                }
+                table.insert(Tab.SubPages, SubPage)
+            end
+
+            ConfigureSubPage(SubPage, Info)
+            Tab.CurrentSubPage = SubPage
+            UpdateSubPageBarVisibility()
+
+            if not Tab.ActiveSubPage or Tab.ActiveSubPage.Visible == false then
+                SubPage:Show(true)
+            else
+                Tab:ApplySubPageVisibility(Library.Searching)
+                SubPage:UpdateButton(true)
+            end
+
+            if Library.ActiveTab == Tab then
+                Tab:UpdateDisplayedInfo()
+            end
+
+            return SubPage
+        end
+
+        Tab.AddSubpage = Tab.AddSubPage
+        Tab.AddPage = Tab.AddSubPage
+
+        function Tab:GetSubPage(SubPageName)
+            return Tab.SubPagesByName[SubPageName]
+        end
+
+        function Tab:SetCurrentSubPage(SubPageName)
+            local SubPage = typeof(SubPageName) == "table" and SubPageName or Tab:GetSubPage(SubPageName)
+
+            if not SubPage then
+                return false
+            end
+
+            Tab.CurrentSubPage = SubPage
+            return true
+        end
+
+        Tab.UseSubPage = Tab.SetCurrentSubPage
+
+        function Tab:ShowSubPage(SubPageName)
+            local SubPage = typeof(SubPageName) == "table" and SubPageName or Tab:GetSubPage(SubPageName)
+
+            if SubPage and SubPage.Show then
+                SubPage:Show(false)
+                return true
+            end
+
+            return false
+        end
+
         function Tab:UpdateWarningBox(Info)
             if typeof(Info.IsNormal) == "boolean" then
                 Tab.WarningBox.IsNormal = Info.IsNormal
@@ -7074,7 +7578,12 @@ function Library:CreateWindow(WindowInfo)
             end
         end
         function Tab:RefreshSides()
-            local Offset = WarningBoxHolder.Visible and WarningBox.Size.Y.Offset + 8 or 0
+            local SubPageOffset = SubPageBar.Visible and 42 or 0
+            local WarningOffset = WarningBoxHolder.Visible and WarningBox.Size.Y.Offset + 8 or 0
+            local Offset = SubPageOffset + WarningOffset
+
+            WarningBoxHolder.Position = UDim2.fromOffset(0, SubPageOffset + 7)
+
             for _, Side in Tab.Sides do
                 Side.Position = UDim2.new(Side.Position.X.Scale, 0, 0, Offset)
                 Side.Size = UDim2.new(0.5, -3, 1, -Offset)
@@ -7211,6 +7720,8 @@ function Library:CreateWindow(WindowInfo)
                 Holder = GroupboxHolder,
                 Container = GroupboxContainer,
                 Tab = Tab,
+                SubPage = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
+                Page = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 DependencyBoxes = {},
                 Elements = {},
                 Collapsed = false
@@ -7239,7 +7750,18 @@ function Library:CreateWindow(WindowInfo)
             end)
             setmetatable(Groupbox, BaseGroupbox)
             Groupbox:Resize()
-            Tab.Groupboxes[Info.Name] = Groupbox
+
+            local GroupboxKey = tostring(Info.Name or "Groupbox")
+            local BaseGroupboxKey = GroupboxKey
+            local GroupboxIndex = 2
+
+            while Tab.Groupboxes[GroupboxKey] do
+                GroupboxKey = string.format("%s %d", BaseGroupboxKey, GroupboxIndex)
+                GroupboxIndex += 1
+            end
+
+            Tab.Groupboxes[GroupboxKey] = Groupbox
+            Groupbox.BoxHolder.Visible = Groupbox.SubPage == Tab.ActiveSubPage
             return Groupbox
         end
         function Tab:AddLeftGroupbox(Name, IconName)
@@ -7296,6 +7818,8 @@ function Library:CreateWindow(WindowInfo)
                 ActiveTab = nil,
                 BoxHolder = BoxHolder,
                 Holder = TabboxHolder,
+                SubPage = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
+                Page = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 Tabs = {}
             }
             function Tabbox:UpdateCorners()
@@ -7478,10 +8002,21 @@ function Library:CreateWindow(WindowInfo)
                 return Tab
             end
             if Info.Name then
-                Tab.Tabboxes[Info.Name] = Tabbox
+                local TabboxKey = tostring(Info.Name)
+                local BaseTabboxKey = TabboxKey
+                local TabboxIndex = 2
+
+                while Tab.Tabboxes[TabboxKey] do
+                    TabboxKey = string.format("%s %d", BaseTabboxKey, TabboxIndex)
+                    TabboxIndex += 1
+                end
+
+                Tab.Tabboxes[TabboxKey] = Tabbox
             else
                 table.insert(Tab.Tabboxes, Tabbox)
             end
+
+            Tabbox.BoxHolder.Visible = Tabbox.SubPage == Tab.ActiveSubPage
             return Tabbox
         end
         function Tab:AddLeftTabbox(Name)
@@ -7521,7 +8056,7 @@ function Library:CreateWindow(WindowInfo)
                     ImageTransparency = 0,
                 }):Play()
             end
-            Window:ShowTabInfo(Name, Description)
+            Tab:UpdateDisplayedInfo()
             TabContainer.Visible = true
             Tab:RefreshSides()
             Library.ActiveTab = Tab
