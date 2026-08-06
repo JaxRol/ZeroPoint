@@ -177,6 +177,12 @@ do
             if self.Library.Toggles.BackgroundImageEnabled then
                 data.BackgroundImageEnabled = self.Library.Toggles.BackgroundImageEnabled.Value
             end
+            if self.Library.Toggles.ScreenEffectsEnabled then
+                data.ScreenEffectsEnabled = self.Library.Toggles.ScreenEffectsEnabled.Value
+            end
+            if self.Library.Toggles.GuiEffectsEnabled then
+                data.GuiEffectsEnabled = self.Library.Toggles.GuiEffectsEnabled.Value
+            end
         end
         if self.Library.Options then
             if self.Library.Options.WindowTransparency then
@@ -187,6 +193,24 @@ do
             end
             if self.Library.Options.BackgroundImage then
                 data.BackgroundImage = self.Library.Options.BackgroundImage.Value
+            end
+            if self.Library.Options.ScreenEffect then
+                data.ScreenEffect = self.Library.Options.ScreenEffect.Value
+            end
+            if self.Library.Options.ScreenEffectIntensity then
+                data.ScreenEffectIntensity = self.Library.Options.ScreenEffectIntensity.Value
+            end
+            if self.Library.Options.ScreenEffectSpeed then
+                data.ScreenEffectSpeed = self.Library.Options.ScreenEffectSpeed.Value
+            end
+            if self.Library.Options.GuiEffect then
+                data.GuiEffect = self.Library.Options.GuiEffect.Value
+            end
+            if self.Library.Options.GuiEffectIntensity then
+                data.GuiEffectIntensity = self.Library.Options.GuiEffectIntensity.Value
+            end
+            if self.Library.Options.GuiEffectSpeed then
+                data.GuiEffectSpeed = self.Library.Options.GuiEffectSpeed.Value
             end
         end
         return data
@@ -217,6 +241,12 @@ do
             if data.BackgroundImageEnabled ~= nil and self.Library.Toggles.BackgroundImageEnabled then
                 self.Library.Toggles.BackgroundImageEnabled:SetValue(data.BackgroundImageEnabled)
             end
+            if data.ScreenEffectsEnabled ~= nil and self.Library.Toggles.ScreenEffectsEnabled then
+                self.Library.Toggles.ScreenEffectsEnabled:SetValue(data.ScreenEffectsEnabled)
+            end
+            if data.GuiEffectsEnabled ~= nil and self.Library.Toggles.GuiEffectsEnabled then
+                self.Library.Toggles.GuiEffectsEnabled:SetValue(data.GuiEffectsEnabled)
+            end
         end
         if self.Library.Options then
             if data.WindowTransparency ~= nil and self.Library.Options.WindowTransparency then
@@ -227,6 +257,24 @@ do
             end
             if data.BackgroundImage and self.Library.Options.BackgroundImage then
                 self.Library.Options.BackgroundImage:SetValue(data.BackgroundImage)
+            end
+            if data.ScreenEffect and self.Library.Options.ScreenEffect then
+                self.Library.Options.ScreenEffect:SetValue(data.ScreenEffect)
+            end
+            if data.ScreenEffectIntensity ~= nil and self.Library.Options.ScreenEffectIntensity then
+                self.Library.Options.ScreenEffectIntensity:SetValue(data.ScreenEffectIntensity)
+            end
+            if data.ScreenEffectSpeed ~= nil and self.Library.Options.ScreenEffectSpeed then
+                self.Library.Options.ScreenEffectSpeed:SetValue(data.ScreenEffectSpeed)
+            end
+            if data.GuiEffect and self.Library.Options.GuiEffect then
+                self.Library.Options.GuiEffect:SetValue(data.GuiEffect)
+            end
+            if data.GuiEffectIntensity ~= nil and self.Library.Options.GuiEffectIntensity then
+                self.Library.Options.GuiEffectIntensity:SetValue(data.GuiEffectIntensity)
+            end
+            if data.GuiEffectSpeed ~= nil and self.Library.Options.GuiEffectSpeed then
+                self.Library.Options.GuiEffectSpeed:SetValue(data.GuiEffectSpeed)
             end
         end
         self:ThemeUpdate()
@@ -404,6 +452,20 @@ do
         groupbox:AddToggle("GradientAnimation", { Text = "Window Animation", Default = self.Library.Scheme.GradientEnabled })
         groupbox:AddSlider("WindowTransparency", { Text = "Window Transparency:", Min = 0, Max = 80, Default = self.Library.Scheme.WindowTransparency or 0, Rounding = 0, Suffix = "%" })
         groupbox:AddSlider("CornerRadius", { Text = "Corner Radius:", Min = 0, Max = 20, Default = self.Library.CornerRadius or 11, Rounding = 0 })
+        groupbox:AddDivider()
+        groupbox:AddLabel("Background Effects")
+        groupbox:AddToggle("ScreenEffectsEnabled", { Text = "Full Screen Effects", Default = self.Library.Scheme.ScreenEffectsEnabled == true })
+        local ScreenEffectsBox = groupbox:AddDependencyBox()
+        ScreenEffectsBox:AddDropdown("ScreenEffect", { Text = "Screen Effect:", Values = self.Library:GetEffectNames(), Default = self.Library.Scheme.ScreenEffect or "Snow" })
+        ScreenEffectsBox:AddSlider("ScreenEffectIntensity", { Text = "Screen Intensity:", Min = 0, Max = 100, Default = self.Library.Scheme.ScreenEffectIntensity or 35, Rounding = 0, Suffix = "%" })
+        ScreenEffectsBox:AddSlider("ScreenEffectSpeed", { Text = "Screen Speed:", Min = 10, Max = 300, Default = self.Library.Scheme.ScreenEffectSpeed or 100, Rounding = 0, Suffix = "%" })
+        ScreenEffectsBox:SetupDependencies({ { self.Library.Toggles.ScreenEffectsEnabled, true } })
+        groupbox:AddToggle("GuiEffectsEnabled", { Text = "Inside GUI Effects", Default = self.Library.Scheme.GuiEffectsEnabled == true })
+        local GuiEffectsBox = groupbox:AddDependencyBox()
+        GuiEffectsBox:AddDropdown("GuiEffect", { Text = "GUI Effect:", Values = self.Library:GetEffectNames(), Default = self.Library.Scheme.GuiEffect or "Snow" })
+        GuiEffectsBox:AddSlider("GuiEffectIntensity", { Text = "GUI Intensity:", Min = 0, Max = 100, Default = self.Library.Scheme.GuiEffectIntensity or 35, Rounding = 0, Suffix = "%" })
+        GuiEffectsBox:AddSlider("GuiEffectSpeed", { Text = "GUI Speed:", Min = 10, Max = 300, Default = self.Library.Scheme.GuiEffectSpeed or 100, Rounding = 0, Suffix = "%" })
+        GuiEffectsBox:SetupDependencies({ { self.Library.Toggles.GuiEffectsEnabled, true } })
         local ThemesArray = {}
         for Name, Theme in pairs(self.BuiltInThemes) do
             table.insert(ThemesArray, Name)
@@ -621,6 +683,30 @@ do
             if self.Library.Window and self.Library.Window.SetCornerRadius then
                 self.Library.Window:SetCornerRadius(Value)
             end
+        end)
+        self.Library.Toggles.ScreenEffectsEnabled:OnChanged(function(Value)
+            self.Library:SetScreenEffectsEnabled(Value)
+        end)
+        self.Library.Options.ScreenEffect:OnChanged(function(Value)
+            self.Library:SetScreenEffect(Value)
+        end)
+        self.Library.Options.ScreenEffectIntensity:OnChanged(function(Value)
+            self.Library:SetScreenEffectIntensity(Value)
+        end)
+        self.Library.Options.ScreenEffectSpeed:OnChanged(function(Value)
+            self.Library:SetScreenEffectSpeed(Value)
+        end)
+        self.Library.Toggles.GuiEffectsEnabled:OnChanged(function(Value)
+            self.Library:SetGuiEffectsEnabled(Value)
+        end)
+        self.Library.Options.GuiEffect:OnChanged(function(Value)
+            self.Library:SetGuiEffect(Value)
+        end)
+        self.Library.Options.GuiEffectIntensity:OnChanged(function(Value)
+            self.Library:SetGuiEffectIntensity(Value)
+        end)
+        self.Library.Options.GuiEffectSpeed:OnChanged(function(Value)
+            self.Library:SetGuiEffectSpeed(Value)
         end)
     end
     function ThemeManager:CreateGroupBox(tab)
