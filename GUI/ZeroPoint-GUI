@@ -182,6 +182,7 @@ local Library = {
     CornerRadius = 11,
     CornerRadiusDropdown = false,
     IsLightTheme = false,
+    EffectSystem = nil,
     Scheme = {
         BackgroundColor = Color3.fromRGB(15, 15, 15),
         MainColor = Color3.fromRGB(25, 25, 25),
@@ -197,6 +198,14 @@ local Library = {
         BackgroundImage = "",
         WindowGlow = true,
         GradientEnabled = false,
+        ScreenEffectsEnabled = false,
+        ScreenEffect = "Snow",
+        ScreenEffectIntensity = 35,
+        ScreenEffectSpeed = 100,
+        GuiEffectsEnabled = false,
+        GuiEffect = "Snow",
+        GuiEffectIntensity = 35,
+        GuiEffectSpeed = 100,
     },
     Registry = {},
     Scales = {},
@@ -291,6 +300,14 @@ local Templates = {
         SidebarCompactWidth = 48,
         SidebarCollapseThreshold = 0.5,
         CompactWidthActivation = 128,
+        ScreenEffects = false,
+        ScreenEffect = "Snow",
+        ScreenEffectIntensity = 35,
+        ScreenEffectSpeed = 100,
+        GuiEffects = false,
+        GuiEffect = "Snow",
+        GuiEffectIntensity = 35,
+        GuiEffectSpeed = 100,
     },
     Dialog = {
         Title = "Dialog",
@@ -1238,6 +1255,413 @@ Library.ScreenGui = ScreenGui
 ScreenGui.DescendantRemoving:Connect(function(Instance)
     Library:RemoveFromRegistry(Instance)
 end)
+local EffectNames = {
+    "Snow",
+    "Rain",
+    "Stars",
+    "Fireflies",
+    "Embers",
+    "Bubbles",
+    "Matrix",
+    "Confetti",
+}
+local EffectRandom = Random.new()
+local EffectSystem = {
+    Connection = nil,
+    Names = EffectNames,
+    Targets = {
+        Screen = {
+            Name = "Screen",
+            Enabled = false,
+            Effect = "Snow",
+            Intensity = 35,
+            Speed = 1,
+            Layer = nil,
+            Particles = {},
+            MaxParticles = Library.IsMobile and 36 or 80,
+        },
+        Gui = {
+            Name = "Gui",
+            Enabled = false,
+            Effect = "Snow",
+            Intensity = 35,
+            Speed = 1,
+            Layer = nil,
+            Particles = {},
+            MaxParticles = Library.IsMobile and 24 or 52,
+        },
+    },
+}
+Library.EffectSystem = EffectSystem
+local EffectColors = {
+    Color3.fromRGB(255, 90, 90),
+    Color3.fromRGB(255, 205, 80),
+    Color3.fromRGB(100, 225, 130),
+    Color3.fromRGB(90, 185, 255),
+    Color3.fromRGB(190, 115, 255),
+    Color3.fromRGB(255, 115, 205),
+}
+local MatrixCharacters = {
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    "A", "B", "C", "D", "E", "F",
+}
+local function GetRandomArrayValue(Array)
+    return Array[EffectRandom:NextInteger(1, #Array)]
+end
+local function NormalizeEffectName(Effect)
+    if typeof(Effect) ~= "string" then
+        return "Snow"
+    end
+    local LowerEffect = Effect:lower()
+    for Index = 1, #EffectNames do
+        local Name = EffectNames[Index]
+        if Name:lower() == LowerEffect then
+            return Name
+        end
+    end
+    return "Snow"
+end
+local function CreateEffectLayer(Name, Parent, ZIndex)
+    local Layer = Instance.new("Frame")
+    Layer.Name = Name
+    Layer.Active = false
+    Layer.BackgroundTransparency = 1
+    Layer.BorderSizePixel = 0
+    Layer.ClipsDescendants = true
+    Layer.Position = UDim2.fromScale(0, 0)
+    Layer.Selectable = false
+    Layer.Size = UDim2.fromScale(1, 1)
+    Layer.Visible = false
+    Layer.ZIndex = ZIndex
+    Layer.Parent = Parent
+    return Layer
+end
+local function DestroyTargetParticles(Target)
+    for Index = #Target.Particles, 1, -1 do
+        local Particle = table.remove(Target.Particles, Index)
+        if Particle and Particle.Object then
+            Particle.Object:Destroy()
+        end
+    end
+end
+local function CreateParticleObject(Target)
+    local Effect = Target.Effect
+    local Object
+    if Effect == "Matrix" then
+        Object = Instance.new("TextLabel")
+        Object.BackgroundTransparency = 1
+        Object.Font = Enum.Font.Code
+        Object.Text = GetRandomArrayValue(MatrixCharacters)
+        Object.TextColor3 = Color3.fromRGB(75, 255, 115)
+        Object.TextScaled = true
+        Object.TextStrokeColor3 = Color3.fromRGB(0, 80, 20)
+        Object.TextStrokeTransparency = 0.45
+    else
+        Object = Instance.new("Frame")
+        Object.BorderSizePixel = 0
+        if Effect == "Bubbles" then
+            Object.BackgroundTransparency = 1
+            local Stroke = Instance.new("UIStroke")
+            Stroke.Color = Color3.fromRGB(190, 225, 255)
+            Stroke.Thickness = 1
+            Stroke.Transparency = 0.25
+            Stroke.Parent = Object
+        else
+            Object.BackgroundColor3 = Color3.new(1, 1, 1)
+            Object.BackgroundTransparency = 0.2
+        end
+        if Effect ~= "Rain" and Effect ~= "Confetti" then
+            local Corner = Instance.new("UICorner")
+            Corner.CornerRadius = UDim.new(1, 0)
+            Corner.Parent = Object
+        end
+        if Effect == "Fireflies" then
+            local Stroke = Instance.new("UIStroke")
+            Stroke.Color = Color3.fromRGB(255, 235, 90)
+            Stroke.Thickness = 2
+            Stroke.Transparency = 0.62
+            Stroke.Parent = Object
+        end
+    end
+    Object.Name = Target.Name .. Target.Effect .. "Particle"
+    Object.AnchorPoint = Vector2.new(0.5, 0.5)
+    Object.Active = false
+    Object.Selectable = false
+    Object.ZIndex = Target.Layer and Target.Layer.ZIndex or 1
+    Object.Parent = Target.Layer
+    return Object
+end
+local function ResetParticle(Target, Particle, Initial)
+    local Effect = Target.Effect
+    local Object = Particle.Object
+    Particle.Effect = Effect
+    Particle.Age = 0
+    Particle.Phase = EffectRandom:NextNumber(0, math.pi * 2)
+    Particle.X = EffectRandom:NextNumber(0, 1)
+    Particle.Y = Initial and EffectRandom:NextNumber(0, 1) or -0.08
+    Particle.VX = 0
+    Particle.VY = 0
+    Particle.Spin = EffectRandom:NextNumber(0, 360)
+    Particle.SpinSpeed = EffectRandom:NextNumber(-80, 80)
+    Particle.MaxLife = EffectRandom:NextNumber(10, 24)
+    Particle.BaseTransparency = EffectRandom:NextNumber(0.08, 0.42)
+    Particle.CharacterElapsed = 0
+    if Effect == "Snow" then
+        local Size = EffectRandom:NextInteger(3, 8)
+        Object.Size = UDim2.fromOffset(Size, Size)
+        Object.BackgroundColor3 = Color3.fromRGB(235, 245, 255)
+        Object.BackgroundTransparency = Particle.BaseTransparency
+        Particle.VX = EffectRandom:NextNumber(-0.018, 0.018)
+        Particle.VY = EffectRandom:NextNumber(0.045, 0.115)
+        Particle.SpinSpeed = EffectRandom:NextNumber(-35, 35)
+    elseif Effect == "Rain" then
+        Object.Size = UDim2.fromOffset(EffectRandom:NextInteger(1, 2), EffectRandom:NextInteger(14, 30))
+        Object.BackgroundColor3 = Color3.fromRGB(165, 205, 255)
+        Object.BackgroundTransparency = EffectRandom:NextNumber(0.25, 0.58)
+        Object.Rotation = 8
+        Particle.VX = -EffectRandom:NextNumber(0.025, 0.055)
+        Particle.VY = EffectRandom:NextNumber(0.58, 0.95)
+    elseif Effect == "Stars" then
+        local Size = EffectRandom:NextInteger(2, 5)
+        Object.Size = UDim2.fromOffset(Size, Size)
+        Object.BackgroundColor3 = EffectRandom:NextNumber() > 0.35 and Color3.fromRGB(255, 250, 220) or Color3.fromRGB(190, 220, 255)
+        Object.BackgroundTransparency = Particle.BaseTransparency
+        Particle.Y = EffectRandom:NextNumber(0, 1)
+        Particle.VX = EffectRandom:NextNumber(-0.003, 0.003)
+        Particle.VY = EffectRandom:NextNumber(0.001, 0.006)
+        Particle.MaxLife = EffectRandom:NextNumber(18, 38)
+    elseif Effect == "Fireflies" then
+        local Size = EffectRandom:NextInteger(4, 8)
+        Object.Size = UDim2.fromOffset(Size, Size)
+        Object.BackgroundColor3 = Color3.fromRGB(255, 230, 75)
+        Object.BackgroundTransparency = EffectRandom:NextNumber(0.18, 0.48)
+        Particle.Y = Initial and EffectRandom:NextNumber(0, 1) or EffectRandom:NextNumber(0.7, 1.05)
+        Particle.VX = EffectRandom:NextNumber(-0.025, 0.025)
+        Particle.VY = EffectRandom:NextNumber(-0.025, 0.01)
+        Particle.MaxLife = EffectRandom:NextNumber(8, 16)
+    elseif Effect == "Embers" then
+        local Size = EffectRandom:NextInteger(2, 6)
+        Object.Size = UDim2.fromOffset(Size, Size)
+        Object.BackgroundColor3 = EffectRandom:NextNumber() > 0.5 and Color3.fromRGB(255, 145, 45) or Color3.fromRGB(255, 75, 35)
+        Object.BackgroundTransparency = EffectRandom:NextNumber(0.08, 0.35)
+        Particle.Y = Initial and EffectRandom:NextNumber(0, 1) or 1.08
+        Particle.VX = EffectRandom:NextNumber(-0.03, 0.03)
+        Particle.VY = -EffectRandom:NextNumber(0.075, 0.19)
+        Particle.MaxLife = EffectRandom:NextNumber(5, 12)
+    elseif Effect == "Bubbles" then
+        local Size = EffectRandom:NextInteger(7, 20)
+        Object.Size = UDim2.fromOffset(Size, Size)
+        Particle.Y = Initial and EffectRandom:NextNumber(0, 1) or 1.1
+        Particle.VX = EffectRandom:NextNumber(-0.015, 0.015)
+        Particle.VY = -EffectRandom:NextNumber(0.045, 0.12)
+        Particle.MaxLife = EffectRandom:NextNumber(9, 20)
+    elseif Effect == "Matrix" then
+        Object.Size = UDim2.fromOffset(EffectRandom:NextInteger(9, 15), EffectRandom:NextInteger(14, 22))
+        Object.Text = GetRandomArrayValue(MatrixCharacters)
+        Object.TextColor3 = EffectRandom:NextNumber() > 0.15 and Color3.fromRGB(70, 255, 105) or Color3.fromRGB(210, 255, 220)
+        Object.TextTransparency = EffectRandom:NextNumber(0.05, 0.38)
+        Particle.VY = EffectRandom:NextNumber(0.13, 0.34)
+        Particle.MaxLife = EffectRandom:NextNumber(5, 12)
+    elseif Effect == "Confetti" then
+        Object.Size = UDim2.fromOffset(EffectRandom:NextInteger(3, 7), EffectRandom:NextInteger(7, 14))
+        Object.BackgroundColor3 = GetRandomArrayValue(EffectColors)
+        Object.BackgroundTransparency = EffectRandom:NextNumber(0.02, 0.22)
+        Particle.VX = EffectRandom:NextNumber(-0.065, 0.065)
+        Particle.VY = EffectRandom:NextNumber(0.12, 0.3)
+        Particle.SpinSpeed = EffectRandom:NextNumber(-240, 240)
+        Particle.MaxLife = EffectRandom:NextNumber(6, 13)
+    end
+    Object.Position = UDim2.fromScale(Particle.X, Particle.Y)
+    if Effect ~= "Rain" then
+        Object.Rotation = Particle.Spin
+    end
+end
+local function CreateTargetParticle(Target, Initial)
+    if not Target.Layer then
+        return
+    end
+    local Particle = {
+        Object = CreateParticleObject(Target),
+    }
+    ResetParticle(Target, Particle, Initial)
+    table.insert(Target.Particles, Particle)
+end
+local function GetDesiredParticleCount(Target)
+    if not Target.Enabled then
+        return 0
+    end
+    return math.floor(Target.MaxParticles * math.clamp(Target.Intensity, 0, 100) / 100 + 0.5)
+end
+local function RefreshTargetParticleCount(Target)
+    if not Target.Layer then
+        return
+    end
+    local DesiredCount = GetDesiredParticleCount(Target)
+    while #Target.Particles < DesiredCount do
+        CreateTargetParticle(Target, true)
+    end
+    while #Target.Particles > DesiredCount do
+        local Particle = table.remove(Target.Particles)
+        if Particle and Particle.Object then
+            Particle.Object:Destroy()
+        end
+    end
+end
+local function UpdateTarget(Target, DeltaTime)
+    if not Target.Enabled or not Target.Layer or not Target.Layer.Visible then
+        return
+    end
+    RefreshTargetParticleCount(Target)
+    local Speed = Target.Speed
+    for Index = 1, #Target.Particles do
+        local Particle = Target.Particles[Index]
+        local Object = Particle.Object
+        local Effect = Particle.Effect
+        Particle.Age += DeltaTime * Speed
+        Particle.Phase += DeltaTime * Speed
+        if Effect == "Snow" then
+            Particle.X += (Particle.VX + math.sin(Particle.Phase * 1.6) * 0.012) * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+            Particle.Spin += Particle.SpinSpeed * DeltaTime * Speed
+            Object.Rotation = Particle.Spin
+        elseif Effect == "Rain" then
+            Particle.X += Particle.VX * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+        elseif Effect == "Stars" then
+            Particle.X += Particle.VX * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+            Object.BackgroundTransparency = math.clamp(Particle.BaseTransparency + math.sin(Particle.Phase * 3.2) * 0.28, 0.02, 0.88)
+        elseif Effect == "Fireflies" then
+            Particle.X += (Particle.VX + math.sin(Particle.Phase * 1.8) * 0.018) * DeltaTime * Speed
+            Particle.Y += (Particle.VY + math.cos(Particle.Phase * 1.35) * 0.012) * DeltaTime * Speed
+            Object.BackgroundTransparency = math.clamp(0.34 + math.sin(Particle.Phase * 4) * 0.28, 0.04, 0.78)
+        elseif Effect == "Embers" then
+            Particle.X += (Particle.VX + math.sin(Particle.Phase * 2.2) * 0.014) * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+            Object.BackgroundTransparency = math.clamp(0.22 + math.sin(Particle.Phase * 7) * 0.18, 0.02, 0.72)
+        elseif Effect == "Bubbles" then
+            Particle.X += (Particle.VX + math.sin(Particle.Phase * 1.7) * 0.012) * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+        elseif Effect == "Matrix" then
+            Particle.Y += Particle.VY * DeltaTime * Speed
+            Particle.CharacterElapsed += DeltaTime * Speed
+            if Particle.CharacterElapsed >= 0.12 then
+                Particle.CharacterElapsed = 0
+                Object.Text = GetRandomArrayValue(MatrixCharacters)
+            end
+        elseif Effect == "Confetti" then
+            Particle.X += (Particle.VX + math.sin(Particle.Phase * 2.5) * 0.018) * DeltaTime * Speed
+            Particle.Y += Particle.VY * DeltaTime * Speed
+            Particle.Spin += Particle.SpinSpeed * DeltaTime * Speed
+            Object.Rotation = Particle.Spin
+        end
+        Object.Position = UDim2.fromScale(Particle.X, Particle.Y)
+        if Particle.X < -0.12
+            or Particle.X > 1.12
+            or Particle.Y < -0.15
+            or Particle.Y > 1.15
+            or Particle.Age >= Particle.MaxLife
+        then
+            ResetParticle(Target, Particle, false)
+        end
+    end
+end
+local function RefreshEffectConnection()
+    local ScreenTarget = EffectSystem.Targets.Screen
+    local GuiTarget = EffectSystem.Targets.Gui
+    local ShouldRun = ScreenTarget.Enabled or GuiTarget.Enabled
+    if ShouldRun and not EffectSystem.Connection then
+        EffectSystem.Connection = RunService.RenderStepped:Connect(function(DeltaTime)
+            if Library.Unloaded then
+                if EffectSystem.Connection then
+                    EffectSystem.Connection:Disconnect()
+                    EffectSystem.Connection = nil
+                end
+                return
+            end
+            UpdateTarget(ScreenTarget, DeltaTime)
+            UpdateTarget(GuiTarget, DeltaTime)
+        end)
+        Library:GiveSignal(EffectSystem.Connection)
+    elseif not ShouldRun and EffectSystem.Connection then
+        EffectSystem.Connection:Disconnect()
+        EffectSystem.Connection = nil
+    end
+end
+local function SetTargetEnabled(Target, Enabled)
+    Target.Enabled = Enabled == true
+    if Target.Layer then
+        Target.Layer.Visible = Target.Enabled
+    end
+    if Target.Enabled then
+        RefreshTargetParticleCount(Target)
+    end
+    RefreshEffectConnection()
+end
+local function SetTargetEffect(Target, Effect)
+    local NewEffect = NormalizeEffectName(Effect)
+    if Target.Effect == NewEffect then
+        return
+    end
+    Target.Effect = NewEffect
+    DestroyTargetParticles(Target)
+    RefreshTargetParticleCount(Target)
+end
+local ScreenEffectLayer = CreateEffectLayer("ScreenEffects", ScreenGui, -100)
+EffectSystem.Targets.Screen.Layer = ScreenEffectLayer
+function Library:GetEffectNames()
+    local Names = {}
+    for Index = 1, #EffectNames do
+        Names[Index] = EffectNames[Index]
+    end
+    return Names
+end
+function Library:SetScreenEffectsEnabled(State: boolean)
+    assert(typeof(State) == "boolean", "Expected boolean for State, got: " .. typeof(State))
+    self.Scheme.ScreenEffectsEnabled = State
+    SetTargetEnabled(EffectSystem.Targets.Screen, State)
+end
+function Library:SetGuiEffectsEnabled(State: boolean)
+    assert(typeof(State) == "boolean", "Expected boolean for State, got: " .. typeof(State))
+    self.Scheme.GuiEffectsEnabled = State
+    SetTargetEnabled(EffectSystem.Targets.Gui, State)
+end
+function Library:SetScreenEffect(Effect: string)
+    local NewEffect = NormalizeEffectName(Effect)
+    self.Scheme.ScreenEffect = NewEffect
+    SetTargetEffect(EffectSystem.Targets.Screen, NewEffect)
+end
+function Library:SetGuiEffect(Effect: string)
+    local NewEffect = NormalizeEffectName(Effect)
+    self.Scheme.GuiEffect = NewEffect
+    SetTargetEffect(EffectSystem.Targets.Gui, NewEffect)
+end
+function Library:SetScreenEffectIntensity(Intensity: number)
+    assert(typeof(Intensity) == "number", "Expected number for Intensity, got: " .. typeof(Intensity))
+    Intensity = math.clamp(Intensity, 0, 100)
+    self.Scheme.ScreenEffectIntensity = Intensity
+    EffectSystem.Targets.Screen.Intensity = Intensity
+    RefreshTargetParticleCount(EffectSystem.Targets.Screen)
+end
+function Library:SetGuiEffectIntensity(Intensity: number)
+    assert(typeof(Intensity) == "number", "Expected number for Intensity, got: " .. typeof(Intensity))
+    Intensity = math.clamp(Intensity, 0, 100)
+    self.Scheme.GuiEffectIntensity = Intensity
+    EffectSystem.Targets.Gui.Intensity = Intensity
+    RefreshTargetParticleCount(EffectSystem.Targets.Gui)
+end
+function Library:SetScreenEffectSpeed(Speed: number)
+    assert(typeof(Speed) == "number", "Expected number for Speed, got: " .. typeof(Speed))
+    Speed = math.clamp(Speed, 10, 300)
+    self.Scheme.ScreenEffectSpeed = Speed
+    EffectSystem.Targets.Screen.Speed = Speed / 100
+end
+function Library:SetGuiEffectSpeed(Speed: number)
+    assert(typeof(Speed) == "number", "Expected number for Speed, got: " .. typeof(Speed))
+    Speed = math.clamp(Speed, 10, 300)
+    self.Scheme.GuiEffectSpeed = Speed
+    EffectSystem.Targets.Gui.Speed = Speed / 100
+end
 local ModalElement = New("TextButton", {
     BackgroundTransparency = 1,
     Modal = false,
@@ -6381,6 +6805,17 @@ function Library:CreateWindow(WindowInfo)
             Visible = false,
             Parent = ScreenGui,
         })
+        if EffectSystem.Targets.Gui.Layer then
+            EffectSystem.Targets.Gui.Layer:Destroy()
+            EffectSystem.Targets.Gui.Layer = nil
+            DestroyTargetParticles(EffectSystem.Targets.Gui)
+        end
+        local GuiEffectLayer = CreateEffectLayer("GuiEffects", MainFrame, 1)
+        local GuiEffectCorner = Instance.new("UICorner")
+        GuiEffectCorner.CornerRadius = UDim.new(0, WindowInfo.CornerRadius)
+        GuiEffectCorner.Parent = GuiEffectLayer
+        table.insert(Library.Corners, GuiEffectCorner)
+        EffectSystem.Targets.Gui.Layer = GuiEffectLayer
         table.insert(
             Library.Corners,
             New("UICorner", {
@@ -6733,6 +7168,8 @@ function Library:CreateWindow(WindowInfo)
     local Window = {
         BackgroundImage = BackgroundImage,
         Glow = Glow,
+        ScreenEffectLayer = EffectSystem.Targets.Screen.Layer,
+        GuiEffectLayer = EffectSystem.Targets.Gui.Layer,
     }
     function Window:ChangeTitle(title)
         assert(typeof(title) == "string", "Expected string for Title, got: " .. typeof(title))
@@ -6747,6 +7184,30 @@ function Library:CreateWindow(WindowInfo)
     end
     function Window:SetGlow(State: boolean)
         return Library:SetGlow(State)
+    end
+    function Window:SetScreenEffectsEnabled(State: boolean)
+        return Library:SetScreenEffectsEnabled(State)
+    end
+    function Window:SetGuiEffectsEnabled(State: boolean)
+        return Library:SetGuiEffectsEnabled(State)
+    end
+    function Window:SetScreenEffect(Effect: string)
+        return Library:SetScreenEffect(Effect)
+    end
+    function Window:SetGuiEffect(Effect: string)
+        return Library:SetGuiEffect(Effect)
+    end
+    function Window:SetScreenEffectIntensity(Intensity: number)
+        return Library:SetScreenEffectIntensity(Intensity)
+    end
+    function Window:SetGuiEffectIntensity(Intensity: number)
+        return Library:SetGuiEffectIntensity(Intensity)
+    end
+    function Window:SetScreenEffectSpeed(Speed: number)
+        return Library:SetScreenEffectSpeed(Speed)
+    end
+    function Window:SetGuiEffectSpeed(Speed: number)
+        return Library:SetGuiEffectSpeed(Speed)
     end
     function Window:SetMobileButtonDragging(Enabled: boolean)
         return Library:SetMobileButtonDragging(Enabled)
@@ -9617,6 +10078,14 @@ function Library:CreateWindow(WindowInfo)
             end
         end))
     end
+    Library:SetScreenEffect(WindowInfo.ScreenEffect)
+    Library:SetGuiEffect(WindowInfo.GuiEffect)
+    Library:SetScreenEffectIntensity(WindowInfo.ScreenEffectIntensity)
+    Library:SetGuiEffectIntensity(WindowInfo.GuiEffectIntensity)
+    Library:SetScreenEffectSpeed(WindowInfo.ScreenEffectSpeed)
+    Library:SetGuiEffectSpeed(WindowInfo.GuiEffectSpeed)
+    Library:SetScreenEffectsEnabled(WindowInfo.ScreenEffects)
+    Library:SetGuiEffectsEnabled(WindowInfo.GuiEffects)
     if WindowInfo.EnableCompacting and WindowInfo.SidebarCompacted then
         Window:SetSidebarWidth(WindowInfo.SidebarCompactWidth)
     end
