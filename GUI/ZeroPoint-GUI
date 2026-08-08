@@ -7581,6 +7581,7 @@ function Library:CreateWindow(WindowInfo)
             Groupboxes = {},
             Tabboxes = {},
             DependencyGroupboxes = {},
+            SingleColumn = false,
             SubPages = {},
             SubPagesByName = {},
             ActiveSubPage = nil,
@@ -8135,10 +8136,48 @@ function Library:CreateWindow(WindowInfo)
 
             WarningBoxHolder.Position = UDim2.fromOffset(0, SubPageOffset + 7)
 
-            for _, Side in Tab.Sides do
-                Side.Position = UDim2.new(Side.Position.X.Scale, 0, 0, Offset)
-                Side.Size = UDim2.new(0.5, -3, 1, -Offset)
+            if Tab.SingleColumn then
+                TabLeft.AnchorPoint = Vector2.zero
+                TabLeft.Position = UDim2.new(0, 0, 0, Offset)
+                TabLeft.Size = UDim2.new(1, 0, 1, -Offset)
+                TabLeft.Visible = true
+
+                TabRight.Visible = false
+                return
             end
+
+            TabLeft.AnchorPoint = Vector2.zero
+            TabLeft.Position = UDim2.new(0, 0, 0, Offset)
+            TabLeft.Size = UDim2.new(0.5, -3, 1, -Offset)
+            TabLeft.Visible = true
+
+            TabRight.AnchorPoint = Vector2.new(1, 0)
+            TabRight.Position = UDim2.new(1, 0, 0, Offset)
+            TabRight.Size = UDim2.new(0.5, -3, 1, -Offset)
+            TabRight.Visible = true
+        end
+
+        function Tab:SetSingleColumn(State)
+            Tab.SingleColumn = State == true
+
+            for _, Groupbox in Tab.Groupboxes do
+                if Groupbox and Groupbox.BoxHolder then
+                    Groupbox.BoxHolder.Parent = Tab.SingleColumn
+                        and TabLeft
+                        or (Groupbox.Side == 2 and TabRight or TabLeft)
+                end
+            end
+
+            for _, Tabbox in Tab.Tabboxes do
+                if Tabbox and Tabbox.BoxHolder then
+                    Tabbox.BoxHolder.Parent = Tab.SingleColumn
+                        and TabLeft
+                        or (Tabbox.Side == 2 and TabRight or TabLeft)
+                end
+            end
+
+            Tab:RefreshSides()
+            return Tab.SingleColumn
         end
         function Tab:Resize(ResizeWarningBox: boolean?)
             if ResizeWarningBox then
@@ -8166,7 +8205,7 @@ function Library:CreateWindow(WindowInfo)
                 AutomaticSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
                 Size = UDim2.fromScale(1, 0),
-                Parent = Info.Side == 1 and TabLeft or TabRight,
+                Parent = Tab.SingleColumn and TabLeft or (Info.Side == 1 and TabLeft or TabRight),
             })
             New("UIListLayout", {
                 Padding = UDim.new(0, 6),
@@ -8271,6 +8310,7 @@ function Library:CreateWindow(WindowInfo)
                 Holder = GroupboxHolder,
                 Container = GroupboxContainer,
                 Tab = Tab,
+                Side = Info.Side == 2 and 2 or 1,
                 SubPage = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 Page = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 DependencyBoxes = {},
@@ -8326,7 +8366,7 @@ function Library:CreateWindow(WindowInfo)
                 AutomaticSize = Enum.AutomaticSize.Y,
                 BackgroundTransparency = 1,
                 Size = UDim2.fromScale(1, 0),
-                Parent = Info.Side == 1 and TabLeft or TabRight,
+                Parent = Tab.SingleColumn and TabLeft or (Info.Side == 1 and TabLeft or TabRight),
             })
             New("UIListLayout", {
                 Padding = UDim.new(0, 6),
@@ -8369,6 +8409,7 @@ function Library:CreateWindow(WindowInfo)
                 ActiveTab = nil,
                 BoxHolder = BoxHolder,
                 Holder = TabboxHolder,
+                Side = Info.Side == 2 and 2 or 1,
                 SubPage = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 Page = Info.SubPage or Tab.CurrentSubPage or Tab.DefaultSubPage,
                 Tabs = {}
@@ -11273,77 +11314,53 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
         or SettingsInfo.SinglePage == true
     local EffectNames = Library:GetEffectNames()
 
-    local SettingsTab
-    local Pages
+    local SettingsTab = Window:AddTab({
+        Name = SettingsName,
+        Icon = SettingsIcon,
+        Description = SettingsDescription,
+    })
 
-    if OneBigSettingsTab then
-        SettingsTab = Window:AddFullSizeTab({
-            Name = SettingsName,
-            Icon = SettingsIcon,
-            Description = SettingsDescription,
-        })
+    local Pages = {
+        Menu = SettingsTab:AddSubPage({
+            Name = "Menu",
+            Icon = "wrench",
+            Description = "General interface behavior",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Watermark = SettingsTab:AddSubPage({
+            Name = "Watermark",
+            Icon = "monitor",
+            Description = "Watermark display settings",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Effects = SettingsTab:AddSubPage({
+            Name = "Effects",
+            Icon = "sparkles",
+            Description = "Animated screen and GUI background effects",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Themes = SettingsTab:AddSubPage({
+            Name = "Themes",
+            Icon = "palette",
+            Description = "Theme and color settings",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Configs = SettingsTab:AddSubPage({
+            Name = "Configs",
+            Icon = "save",
+            Description = "Save and load configurations",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+    }
 
-        Pages = {
-            Menu = SettingsTab,
-            Watermark = SettingsTab,
-            Effects = SettingsTab,
-            Themes = SettingsTab,
-            Configs = SettingsTab,
-        }
-    else
-        SettingsTab = Window:AddTab({
-            Name = SettingsName,
-            Icon = SettingsIcon,
-            Description = SettingsDescription,
-        })
-
-        Pages = {
-            Menu = SettingsTab:AddSubPage({
-                Name = "Menu",
-                Icon = "wrench",
-                Description = "General interface behavior",
-                ShowName = ShowSubPageNames,
-                ShowIcon = ShowSubPageIcons,
-            }),
-            Watermark = SettingsTab:AddSubPage({
-                Name = "Watermark",
-                Icon = "monitor",
-                Description = "Watermark display settings",
-                ShowName = ShowSubPageNames,
-                ShowIcon = ShowSubPageIcons,
-            }),
-            Effects = SettingsTab:AddSubPage({
-                Name = "Effects",
-                Icon = "sparkles",
-                Description = "Animated screen and GUI background effects",
-                ShowName = ShowSubPageNames,
-                ShowIcon = ShowSubPageIcons,
-            }),
-            Themes = SettingsTab:AddSubPage({
-                Name = "Themes",
-                Icon = "palette",
-                Description = "Theme and color settings",
-                ShowName = ShowSubPageNames,
-                ShowIcon = ShowSubPageIcons,
-            }),
-            Configs = SettingsTab:AddSubPage({
-                Name = "Configs",
-                Icon = "save",
-                Description = "Save and load configurations",
-                ShowName = ShowSubPageNames,
-                ShowIcon = ShowSubPageIcons,
-            }),
-        }
-    end
+    SettingsTab:SetSingleColumn(OneBigSettingsTab)
 
     local function AddSettingsGroup(Page, Name, Icon, Side)
-        if OneBigSettingsTab then
-            return SettingsTab:AddGroupbox({
-                Name = Name,
-                Icon = Icon,
-            })
-        end
-
         if Side == 2 then
             return Page:AddRightGroupbox(Name, Icon)
         end
