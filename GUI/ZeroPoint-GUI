@@ -1,4 +1,5 @@
 
+
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -7629,9 +7630,15 @@ function Library:CreateWindow(WindowInfo)
             SubPage.Name = GetUniqueSubPageName(Info.Name or SubPage.Name or "Page")
             SubPage.Description = Info.Description or SubPage.Description or "No Description"
             SubPage.IconName = Info.Icon or Info.IconName or SubPage.IconName or "layout-grid"
+            SubPage.ShowName = Info.ShowName ~= false
+            SubPage.ShowIcon = Info.ShowIcon ~= false
             SubPage.Visible = Info.Visible ~= false
             SubPage.LeftCanvasPosition = SubPage.LeftCanvasPosition or Vector2.zero
             SubPage.RightCanvasPosition = SubPage.RightCanvasPosition or Vector2.zero
+
+            if not SubPage.ShowName and not SubPage.ShowIcon then
+                SubPage.ShowName = true
+            end
 
             local PageIcon = Library:GetCustomIcon(SubPage.IconName) or FileQuestionMarkIcon
             local Button = New("TextButton", {
@@ -7658,7 +7665,21 @@ function Library:CreateWindow(WindowInfo)
                 ImageRectSize = PageIcon and PageIcon.ImageRectSize or Vector2.zero,
                 ImageTransparency = 0.5,
                 Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromOffset(20, 20),
+                Size = UDim2.fromOffset(18, 18),
+                Visible = SubPage.ShowIcon,
+                Parent = Button,
+            })
+            local ButtonLabel = New("TextLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.new(1, -20, 1, 0),
+                Text = SubPage.Name,
+                TextSize = 14,
+                TextTransparency = 0.5,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                Visible = SubPage.ShowName,
                 Parent = Button,
             })
             local Selection = New("Frame", {
@@ -7674,19 +7695,53 @@ function Library:CreateWindow(WindowInfo)
                 Parent = Selection,
             })
 
+            local function UpdateSubPageButtonLayout()
+                ButtonIcon.Visible = SubPage.ShowIcon
+                ButtonLabel.Visible = SubPage.ShowName
+                ButtonLabel.Text = SubPage.Name
+
+                if SubPage.ShowName then
+                    local TextWidth = Library:GetTextBounds(SubPage.Name, Library.Scheme.Font, ButtonLabel.TextSize)
+                    local ButtonWidth = math.ceil(TextWidth) + 24
+
+                    if SubPage.ShowIcon then
+                        ButtonWidth += 26
+                        ButtonIcon.AnchorPoint = Vector2.new(0, 0.5)
+                        ButtonIcon.Position = UDim2.new(0, 12, 0.5, 0)
+                        ButtonLabel.AnchorPoint = Vector2.new(0, 0.5)
+                        ButtonLabel.Position = UDim2.new(0, 38, 0.5, 0)
+                        ButtonLabel.Size = UDim2.new(1, -50, 1, 0)
+                        ButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
+                    else
+                        ButtonLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+                        ButtonLabel.Position = UDim2.fromScale(0.5, 0.5)
+                        ButtonLabel.Size = UDim2.new(1, -20, 1, 0)
+                        ButtonLabel.TextXAlignment = Enum.TextXAlignment.Center
+                    end
+
+                    Button.Size = UDim2.fromOffset(math.max(ButtonWidth, 44), 34)
+                else
+                    Button.Size = UDim2.fromOffset(34, 34)
+                    ButtonIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                    ButtonIcon.Position = UDim2.fromScale(0.5, 0.5)
+                end
+            end
+
             SubPage.Button = Button
             SubPage.ButtonIcon = ButtonIcon
+            SubPage.ButtonLabel = ButtonLabel
             SubPage.Selection = Selection
 
             function SubPage:UpdateButton(Instant)
                 local Active = Tab.ActiveSubPage == SubPage
                 local ButtonTransparency = Active and 0.85 or 1
-                local IconTransparency = Active and 0 or 0.5
+                local ContentTransparency = Active and 0 or 0.5
                 local SelectionTransparency = Active and 0 or 1
 
                 if Instant then
                     Button.BackgroundTransparency = ButtonTransparency
-                    ButtonIcon.ImageTransparency = IconTransparency
+                    ButtonIcon.ImageTransparency = ContentTransparency
+                    ButtonLabel.TextTransparency = ContentTransparency
                     Selection.BackgroundTransparency = SelectionTransparency
                     return
                 end
@@ -7695,7 +7750,10 @@ function Library:CreateWindow(WindowInfo)
                     BackgroundTransparency = ButtonTransparency,
                 }):Play()
                 TweenService:Create(ButtonIcon, Library.TweenInfo, {
-                    ImageTransparency = IconTransparency,
+                    ImageTransparency = ContentTransparency,
+                }):Play()
+                TweenService:Create(ButtonLabel, Library.TweenInfo, {
+                    TextTransparency = ContentTransparency,
                 }):Play()
                 TweenService:Create(Selection, Library.TweenInfo, {
                     BackgroundTransparency = SelectionTransparency,
@@ -7760,6 +7818,28 @@ function Library:CreateWindow(WindowInfo)
                 if Library.ActiveTab == Tab then
                     Tab:UpdateDisplayedInfo()
                 end
+            end
+
+            function SubPage:SetShowName(Visible)
+                SubPage.ShowName = Visible == true
+
+                if not SubPage.ShowName and not SubPage.ShowIcon then
+                    SubPage.ShowIcon = true
+                end
+
+                UpdateSubPageButtonLayout()
+                return SubPage.ShowName
+            end
+
+            function SubPage:SetShowIcon(Visible)
+                SubPage.ShowIcon = Visible == true
+
+                if not SubPage.ShowIcon and not SubPage.ShowName then
+                    SubPage.ShowName = true
+                end
+
+                UpdateSubPageButtonLayout()
+                return SubPage.ShowIcon
             end
 
             function SubPage:SetIcon(IconName)
@@ -7835,9 +7915,17 @@ function Library:CreateWindow(WindowInfo)
 
             Button.MouseEnter:Connect(function()
                 if Tab.ActiveSubPage ~= SubPage then
-                    TweenService:Create(ButtonIcon, Library.TweenInfo, {
-                        ImageTransparency = 0.2,
-                    }):Play()
+                    if SubPage.ShowIcon then
+                        TweenService:Create(ButtonIcon, Library.TweenInfo, {
+                            ImageTransparency = 0.2,
+                        }):Play()
+                    end
+
+                    if SubPage.ShowName then
+                        TweenService:Create(ButtonLabel, Library.TweenInfo, {
+                            TextTransparency = 0.2,
+                        }):Play()
+                    end
                 end
 
                 Library:AddTooltip(SubPage.Name, SubPage.Description, Button)
@@ -7849,6 +7937,7 @@ function Library:CreateWindow(WindowInfo)
                 SubPage:Show(false)
             end)
 
+            UpdateSubPageButtonLayout()
             Tab.SubPagesByName[SubPage.Name] = SubPage
             SubPage:UpdateButton(true)
             return SubPage
