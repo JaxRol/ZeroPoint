@@ -279,6 +279,8 @@ local Templates = {
         Center = true,
         Resizable = true,
         Glow = true,
+        BackgroundImageEnabled = false,
+        BackgroundImage = "",
         SearchbarSize = UDim2.fromScale(1, 1),
         GlobalSearch = false,
         CornerRadius = 4,
@@ -6697,13 +6699,26 @@ end
 function Library:SetBackgroundImageEnabled(State: boolean)
     assert(typeof(State) == "boolean", "Expected boolean for State, got: " .. typeof(State))
     self.Scheme.BackgroundImageEnabled = State
-    self.Window.BackgroundImage.Visible = State
+
+    if self.Window and self.Window.BackgroundImage then
+        self.Window.BackgroundImage.Visible = State and self.Window.BackgroundImage.Image ~= ""
+    end
+
     self:UpdateColorsUsingRegistry()
 end
 function Library:SetBackgroundImage(Image: string | number)
     assert(typeof(Image) == "string" or typeof(Image) == "number", "Expected string/number for Image, got: " .. typeof(Image))
-    self.Scheme.BackgroundImage = Library:GetCustomImage(Image).Url
-    self.Window.BackgroundImage.Image = Library:GetCustomImage(Image).Url
+
+    local ImageData = Library:GetCustomImage(Image)
+    local ImageUrl = typeof(ImageData) == "table" and ImageData.Url or ""
+
+    self.Scheme.BackgroundImage = ImageUrl
+
+    if self.Window and self.Window.BackgroundImage then
+        self.Window.BackgroundImage.Image = ImageUrl
+        self.Window.BackgroundImage.Visible = self.Scheme.BackgroundImageEnabled and ImageUrl ~= ""
+    end
+
     self:UpdateColorsUsingRegistry()
 end
 function Library:SetGlow(State: boolean)
@@ -6786,8 +6801,12 @@ function Library:CreateWindow(WindowInfo)
     Library.CornerRadius = WindowInfo.CornerRadius
     Library:SetNotifySide(WindowInfo.NotifySide)
     Library.ShowCustomCursor = WindowInfo.ShowCustomCursor
-    Library.Scheme.BackgroundImageEnabled = WindowInfo.BackgroundImage and true or false
-    Library.Scheme.BackgroundImage = WindowInfo.BackgroundImage
+
+    local InitialBackgroundImageData = Library:GetCustomImage(WindowInfo.BackgroundImage or "")
+    local InitialBackgroundImage = typeof(InitialBackgroundImageData) == "table" and InitialBackgroundImageData.Url or ""
+
+    Library.Scheme.BackgroundImageEnabled = WindowInfo.BackgroundImageEnabled == true or InitialBackgroundImage ~= ""
+    Library.Scheme.BackgroundImage = InitialBackgroundImage
     Library.Scheme.WindowGlow = WindowInfo.Glow
     Library.Scheme.Font = WindowInfo.Font
     Library.ToggleKeybind = WindowInfo.ToggleKeybind
@@ -6808,6 +6827,7 @@ function Library:CreateWindow(WindowInfo)
     local Tabs
     local Container
     local BackgroundImage
+    local GradientOverlay
     local BottomBackground
     local FooterLabel
     local InitialLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
@@ -6834,7 +6854,9 @@ function Library:CreateWindow(WindowInfo)
             EffectSystem.Targets.Gui.Layer = nil
             DestroyTargetParticles(EffectSystem.Targets.Gui)
         end
-        local GuiEffectLayer = CreateEffectLayer("GuiEffects", MainFrame, 1)
+        local GuiEffectLayer = CreateEffectLayer("GuiEffects", MainFrame, 3)
+        GuiEffectLayer:SetAttribute("ZeroPointVisualLayer", true)
+
         local GuiEffectCorner = Instance.new("UICorner")
         GuiEffectCorner.CornerRadius = UDim.new(0, WindowInfo.CornerRadius)
         GuiEffectCorner.Parent = GuiEffectLayer
@@ -6846,12 +6868,20 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            if Instance == GuiEffectLayer or Instance:IsDescendantOf(GuiEffectLayer) then
+            if Instance:GetAttribute("ZeroPointVisualLayer")
+                or Instance == GuiEffectLayer
+                or Instance:IsDescendantOf(GuiEffectLayer)
+            then
                 return
             end
 
-            if Instance.ZIndex <= 2 then
-                Instance.ZIndex = 3
+            if Instance:GetAttribute("ZeroPointBackgroundHost") then
+                Instance.ZIndex = 1
+                return
+            end
+
+            if Instance.ZIndex < 5 then
+                Instance.ZIndex = 5
             end
         end
 
@@ -6901,16 +6931,17 @@ function Library:CreateWindow(WindowInfo)
             Parent = MainFrame,
         })
         BackgroundImage = New("ImageLabel", {
-            Image = WindowInfo.BackgroundImage,
+            Image = InitialBackgroundImage,
             Position = UDim2.fromScale(0, 0),
             Size = UDim2.fromScale(1, 1),
             ScaleType = Enum.ScaleType.Stretch,
-            ZIndex = 999,
+            ZIndex = 2,
             BackgroundTransparency = 1,
             ImageTransparency = 0.75,
-            Visible = WindowInfo.BackgroundImage and true or false,
+            Visible = Library.Scheme.BackgroundImageEnabled and InitialBackgroundImage ~= "",
             Parent = MainFrame,
         })
+        BackgroundImage:SetAttribute("ZeroPointVisualLayer", true)
         table.insert(
             Library.Corners,
             New("UICorner", {
@@ -6919,15 +6950,16 @@ function Library:CreateWindow(WindowInfo)
             })
         )
         do
-            local GradientOverlay = New("Frame", {
+            GradientOverlay = New("Frame", {
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BackgroundTransparency = 0,
                 ClipsDescendants = true,
                 Size = UDim2.fromScale(1, 1),
-                ZIndex = 2,
+                ZIndex = 3,
                 Visible = Library.Scheme.GradientEnabled,
                 Parent = MainFrame,
             })
+            GradientOverlay:SetAttribute("ZeroPointVisualLayer", true)
             table.insert(Library.Corners, New("UICorner", {
                 CornerRadius = UDim.new(0, WindowInfo.CornerRadius),
                 Parent = GradientOverlay,
@@ -7118,8 +7150,10 @@ function Library:CreateWindow(WindowInfo)
             end,
             Position = UDim2.fromScale(0, 1),
             Size = UDim2.new(1, 0, 0, 20 + WindowInfo.CornerRadius),
+            ZIndex = 1,
             Parent = MainFrame
         })
+        BottomBackground:SetAttribute("ZeroPointBackgroundHost", true)
         Library:MakeLine(MainFrame, {
             AnchorPoint = Vector2.new(0, 1),
             Position = UDim2.new(0, 0, 1, -20),
@@ -7177,6 +7211,7 @@ function Library:CreateWindow(WindowInfo)
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             BackgroundColor3 = "BackgroundColor",
             CanvasSize = UDim2.fromScale(0, 0),
+            ZIndex = 1,
             Position = UDim2.fromOffset(0, 49),
             ScrollBarImageColor3 = "AccentColor",
             ScrollBarImageTransparency = 0.2,
@@ -7185,6 +7220,7 @@ function Library:CreateWindow(WindowInfo)
             Size = UDim2.new(0, InitialLeftWidth, 1, -70),
             Parent = MainFrame,
         })
+        Tabs:SetAttribute("ZeroPointBackgroundHost", true)
         Library:MakeDragScrollable(Tabs)
         New("UIListLayout", {
             Parent = Tabs,
@@ -7202,10 +7238,12 @@ function Library:CreateWindow(WindowInfo)
                 return Library:GetBetterColor(Library.Scheme.BackgroundColor, 1)
             end,
             Name = "Container",
+            ZIndex = 1,
             Position = UDim2.new(1, 0, 0, 49),
             Size = UDim2.new(1, -InitialLeftWidth - 1, 1, -70),
             Parent = MainFrame,
         })
+        Container:SetAttribute("ZeroPointBackgroundHost", true)
         New("UIPadding", {
             PaddingBottom = UDim.new(0, 0),
             PaddingLeft = UDim.new(0, 6),
@@ -11460,9 +11498,7 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
         Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
         Default = tostring(math.floor((Library.DPIScale or 1) * 100 + 0.5)) .. "%",
         Callback = function(Value)
-            local System = (tostring(Value):gsub("%%", ""))
-            local Scale = tonumber(System)
-
+            local Scale = tonumber(tostring(Value):gsub("%%", ""))
             if Scale then
                 Library:SetDPIScale(Scale)
             end
