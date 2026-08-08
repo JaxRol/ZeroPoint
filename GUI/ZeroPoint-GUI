@@ -1570,7 +1570,7 @@ end
 local function RefreshEffectConnection()
     local ScreenTarget = EffectSystem.Targets.Screen
     local GuiTarget = EffectSystem.Targets.Gui
-    local ShouldRun = ScreenTarget.Enabled or GuiTarget.Enabled
+    local ShouldRun = Library.Toggled and (ScreenTarget.Enabled or GuiTarget.Enabled)
     if ShouldRun and not EffectSystem.Connection then
         EffectSystem.Connection = RunService.RenderStepped:Connect(function(DeltaTime)
             if Library.Unloaded then
@@ -1592,7 +1592,7 @@ end
 local function SetTargetEnabled(Target, Enabled)
     Target.Enabled = Enabled == true
     if Target.Layer then
-        Target.Layer.Visible = Target.Enabled
+        Target.Layer.Visible = Target.Enabled and Library.Toggled
     end
     if Target.Enabled then
         RefreshTargetParticleCount(Target)
@@ -1608,7 +1608,7 @@ local function SetTargetEffect(Target, Effect)
     DestroyTargetParticles(Target)
     RefreshTargetParticleCount(Target)
 end
-local ScreenEffectLayer = CreateEffectLayer("ScreenEffects", ScreenGui, -100)
+local ScreenEffectLayer = CreateEffectLayer("ScreenEffects", ScreenGui, 1)
 EffectSystem.Targets.Screen.Layer = ScreenEffectLayer
 function Library:GetEffectNames()
     local Names = {}
@@ -7210,6 +7210,9 @@ function Library:CreateWindow(WindowInfo)
     function Window:SetGuiEffectSpeed(Speed: number)
         return Library:SetGuiEffectSpeed(Speed)
     end
+    function Window:LoadSettingsTab(SettingsInfo)
+        return Library:LoadSettingsTab(self, SettingsInfo)
+    end
     function Window:SetMobileButtonDragging(Enabled: boolean)
         return Library:SetMobileButtonDragging(Enabled)
     end
@@ -10058,6 +10061,20 @@ function Library:CreateWindow(WindowInfo)
             Library.Toggled = not Library.Toggled
         end
         MainFrame.Visible = Library.Toggled
+
+        local ScreenEffectTarget = EffectSystem.Targets.Screen
+        local GuiEffectTarget = EffectSystem.Targets.Gui
+
+        if ScreenEffectTarget.Layer then
+            ScreenEffectTarget.Layer.Visible = ScreenEffectTarget.Enabled and Library.Toggled
+        end
+
+        if GuiEffectTarget.Layer then
+            GuiEffectTarget.Layer.Visible = GuiEffectTarget.Enabled and Library.Toggled
+        end
+
+        RefreshEffectConnection()
+
         if WindowInfo.UnlockMouseWhileOpen then
             ModalElement.Modal = Library.Toggled
         end
@@ -11059,8 +11076,8 @@ do
         end
         _WMFrame = Instance.new("Frame")
         _WMFrame.Name = "WatermarkFrame"
-        _WMFrame.BackgroundColor3 = Library.Scheme.BackgroundColor
-        _WMFrame.BackgroundTransparency = 0
+        _WMFrame.BackgroundColor3 = cfg.BackgroundColor
+        _WMFrame.BackgroundTransparency = cfg.BackgroundTransparency
         _WMFrame.BorderSizePixel = 0
         _WMFrame.Active = true
         _WMFrame.Position = InitialPosition
@@ -11094,7 +11111,7 @@ do
         _WMLabel.Size = UDim2.new(1, -54, 1, 0)
         _WMLabel.Font = Enum.Font.GothamBold
         _WMLabel.Text = ""
-        _WMLabel.TextColor3 = Library.Scheme.FontColor
+        _WMLabel.TextColor3 = cfg.TextColor
         _WMLabel.TextSize = 13
         _WMLabel.TextXAlignment = Enum.TextXAlignment.Left
         _WMLabel.Parent = _WMFrame
@@ -11145,7 +11162,8 @@ do
                 return
             end
             _WMFrame.Visible = true
-            _WMFrame.BackgroundColor3 = Library.Scheme.BackgroundColor
+            _WMFrame.BackgroundColor3 = cfg.BackgroundColor
+            _WMFrame.BackgroundTransparency = cfg.BackgroundTransparency
             _wmStroke.Color = Library.Scheme.AccentColor
             _WMResetButton.BackgroundColor3 = Library.Scheme.MainColor
             _WMResetButton.TextColor3 = Library.Scheme.FontColor
@@ -11155,7 +11173,7 @@ do
                 ColorSequenceKeypoint.new(0.15, Library.Scheme.MainColor),
                 ColorSequenceKeypoint.new(1, Library.Scheme.BackgroundColor),
             })
-            _WMLabel.TextColor3 = Library.Scheme.FontColor
+            _WMLabel.TextColor3 = cfg.TextColor
             local parts = { Library.WatermarkConfig.ScriptName }
             if Library.WatermarkConfig.ShowName then
                 table.insert(parts, lp.Name)
@@ -11235,6 +11253,451 @@ do
             end,
         }
     end
+end
+
+
+function Library:LoadSettingsTab(Window, SettingsInfo)
+    assert(typeof(Window) == "table" and typeof(Window.AddTab) == "function", "LoadSettingsTab expected a valid Window")
+
+    if Library.SettingsTab and Library.SettingsTab.Window == Window then
+        return Library.SettingsTab
+    end
+
+    SettingsInfo = typeof(SettingsInfo) == "table" and SettingsInfo or {}
+
+    local ScriptName = tostring(SettingsInfo.ScriptName or "Script")
+    local SettingsName = tostring(SettingsInfo.Name or "UI Settings")
+    local SettingsIcon = SettingsInfo.Icon or "settings"
+    local SettingsDescription = SettingsInfo.Description or "Interface configuration, effects, themes, and configs"
+    local ShowSubPageNames = SettingsInfo.ShowSubPageNames == true
+    local ShowSubPageIcons = SettingsInfo.ShowSubPageIcons ~= false
+    local EffectNames = Library:GetEffectNames()
+
+    local SettingsTab = Window:AddTab({
+        Name = SettingsName,
+        Icon = SettingsIcon,
+        Description = SettingsDescription,
+    })
+
+    local Pages = {
+        Menu = SettingsTab:AddSubPage({
+            Name = "Menu",
+            Icon = "wrench",
+            Description = "General interface behavior",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Watermark = SettingsTab:AddSubPage({
+            Name = "Watermark",
+            Icon = "monitor",
+            Description = "Watermark display settings",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Effects = SettingsTab:AddSubPage({
+            Name = "Effects",
+            Icon = "sparkles",
+            Description = "Animated screen and GUI background effects",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Themes = SettingsTab:AddSubPage({
+            Name = "Themes",
+            Icon = "palette",
+            Description = "Theme and color settings",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+        Configs = SettingsTab:AddSubPage({
+            Name = "Configs",
+            Icon = "save",
+            Description = "Save and load configurations",
+            ShowName = ShowSubPageNames,
+            ShowIcon = ShowSubPageIcons,
+        }),
+    }
+
+    local MenuGroup = Pages.Menu:AddLeftGroupbox("Interface", "wrench")
+    local WindowGroup = Pages.Menu:AddRightGroupbox("Window", "panel-top")
+    local WatermarkGroup = Pages.Watermark:AddLeftGroupbox("Watermark", "monitor")
+    local ScreenEffectsGroup = Pages.Effects:AddLeftGroupbox("Screen Effects", "monitor-up")
+    local GuiEffectsGroup = Pages.Effects:AddRightGroupbox("GUI Effects", "sparkles")
+    local ThemesGroup = Pages.Themes:AddLeftGroupbox("Themes", "palette")
+    local ConfigsGroup = Pages.Configs:AddLeftGroupbox("Configs", "save")
+
+    MenuGroup:AddToggle("UISettingsKeybindMenuOpen", {
+        Text = "Open Keybind Menu",
+        Default = Library.KeybindFrame and Library.KeybindFrame.Visible or false,
+        Callback = function(Value)
+            if Library.KeybindFrame then
+                Library.KeybindFrame.Visible = Value
+            end
+        end,
+    })
+
+    MenuGroup:AddToggle("UISettingsCustomCursor", {
+        Text = "Custom Cursor",
+        Default = Library.ShowCustomCursor,
+        Callback = function(Value)
+            Library.ShowCustomCursor = Value
+        end,
+    })
+
+    MenuGroup:AddDropdown("UISettingsNotificationSide", {
+        Text = "Notification Side",
+        Values = { "Left", "Right" },
+        Default = Library.NotifySide,
+        Callback = function(Value)
+            Library:SetNotifySide(Value)
+        end,
+    })
+
+    MenuGroup:AddDropdown("UISettingsDPIScale", {
+        Text = "DPI Scale",
+        Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+        Default = tostring(math.floor((Library.DPIScale or 1) * 100 + 0.5)) .. "%",
+        Callback = function(Value)
+            local Scale = tonumber(tostring(Value):gsub("%%", ""))
+            if Scale then
+                Library:SetDPIScale(Scale)
+            end
+        end,
+    })
+
+    MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+        Default = Library.ToggleKeybind and Library.ToggleKeybind.Name or "RightControl",
+        NoUI = true,
+        Text = "Menu keybind",
+    })
+
+    if Options.MenuKeybind then
+        Library.ToggleKeybind = Options.MenuKeybind
+    end
+
+    MenuGroup:AddButton("Unload", function()
+        Library:Unload()
+    end)
+
+    WindowGroup:AddSlider("UISettingsCornerRadius", {
+        Text = "Corner Radius",
+        Default = Library.CornerRadius,
+        Min = 0,
+        Max = 20,
+        Rounding = 0,
+        Callback = function(Value)
+            Window:SetCornerRadius(Value)
+        end,
+    })
+
+    WindowGroup:AddToggle("UISettingsWindowGlow", {
+        Text = "Window Glow",
+        Default = Library.Scheme.WindowGlow,
+        Callback = function(Value)
+            Library:SetGlow(Value)
+        end,
+    })
+
+    WindowGroup:AddToggle("UISettingsAnimatedGradient", {
+        Text = "Animated Gradient",
+        Default = Library.Scheme.GradientEnabled,
+        Callback = function(Value)
+            Library:SetGradientAnimation(Value)
+        end,
+    })
+
+    local BackgroundImageToggle = WindowGroup:AddToggle("UISettingsBackgroundImageEnabled", {
+        Text = "Background Image",
+        Default = Library.Scheme.BackgroundImageEnabled,
+        Callback = function(Value)
+            Library:SetBackgroundImageEnabled(Value)
+        end,
+    })
+
+    local BackgroundImageSettings = WindowGroup:AddDependencyBox()
+
+    BackgroundImageSettings:AddInput("UISettingsBackgroundImage", {
+        Text = "Image ID / URL",
+        Default = tostring(Library.Scheme.BackgroundImage or ""),
+        Placeholder = "rbxassetid://...",
+        Callback = function(Value)
+            Library:SetBackgroundImage(Value)
+        end,
+    })
+
+    BackgroundImageSettings:SetupDependencies({
+        { BackgroundImageToggle, true },
+    })
+
+    local Watermark = Library:SetupWatermark({
+        ShowWatermark = SettingsInfo.ShowWatermark == true,
+        ScriptName = ScriptName,
+        ShowName = SettingsInfo.WatermarkShowName ~= false,
+        ShowFPS = SettingsInfo.WatermarkShowFPS ~= false,
+        ShowPing = SettingsInfo.WatermarkShowPing ~= false,
+        TextColor = SettingsInfo.WatermarkTextColor or Library.Scheme.FontColor,
+        BackgroundColor = SettingsInfo.WatermarkBackgroundColor or Library.Scheme.BackgroundColor,
+        BackgroundTransparency = tonumber(SettingsInfo.WatermarkBackgroundTransparency) or 0.3,
+    })
+
+    WatermarkGroup:AddToggle("UISettingsWatermarkVisible", {
+        Text = "Show Watermark",
+        Default = SettingsInfo.ShowWatermark == true,
+        Callback = function(Value)
+            Watermark:SetVisible(Value)
+        end,
+    })
+
+    WatermarkGroup:AddToggle("UISettingsWatermarkShowName", {
+        Text = "Show Player Name",
+        Default = SettingsInfo.WatermarkShowName ~= false,
+        Callback = function(Value)
+            Watermark:ShowName(Value)
+        end,
+    })
+
+    WatermarkGroup:AddToggle("UISettingsWatermarkShowFPS", {
+        Text = "Show FPS",
+        Default = SettingsInfo.WatermarkShowFPS ~= false,
+        Callback = function(Value)
+            Watermark:ShowFPS(Value)
+        end,
+    })
+
+    WatermarkGroup:AddToggle("UISettingsWatermarkShowPing", {
+        Text = "Show Ping",
+        Default = SettingsInfo.WatermarkShowPing ~= false,
+        Callback = function(Value)
+            Watermark:ShowPing(Value)
+        end,
+    })
+
+    WatermarkGroup:AddInput("UISettingsWatermarkText", {
+        Text = "Script Name",
+        Default = ScriptName,
+        Placeholder = "Enter script name...",
+        Callback = function(Value)
+            Watermark:SetScriptName(Value ~= "" and Value or ScriptName)
+        end,
+    })
+
+    WatermarkGroup:AddLabel("Text Color"):AddColorPicker("UISettingsWatermarkTextColor", {
+        Default = SettingsInfo.WatermarkTextColor or Library.Scheme.FontColor,
+        Title = "Watermark Text Color",
+        Callback = function(Value)
+            Watermark:SetTextColor(Value)
+        end,
+    })
+
+    WatermarkGroup:AddLabel("Background Color"):AddColorPicker("UISettingsWatermarkBackgroundColor", {
+        Default = SettingsInfo.WatermarkBackgroundColor or Library.Scheme.BackgroundColor,
+        Title = "Watermark Background Color",
+        Callback = function(Value)
+            Watermark:SetBackgroundColor(Value)
+        end,
+    })
+
+    WatermarkGroup:AddSlider("UISettingsWatermarkBackgroundTransparency", {
+        Text = "Background Transparency",
+        Default = math.clamp(math.floor((tonumber(SettingsInfo.WatermarkBackgroundTransparency) or 0.3) * 100 + 0.5), 0, 100),
+        Min = 0,
+        Max = 100,
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(Value)
+            Watermark:SetBackgroundTransparency(Value / 100)
+        end,
+    })
+
+    ScreenEffectsGroup:AddLabel("Effects drawn behind the GUI across the full screen.")
+
+    local ScreenEffectsToggle = ScreenEffectsGroup:AddToggle("UISettingsScreenEffects", {
+        Text = "Full Screen Effects",
+        Default = Library.Scheme.ScreenEffectsEnabled,
+        Callback = function(Value)
+            Library:SetScreenEffectsEnabled(Value)
+        end,
+    })
+
+    local ScreenEffectSettings = ScreenEffectsGroup:AddDependencyBox()
+
+    ScreenEffectSettings:AddDropdown("UISettingsScreenEffect", {
+        Text = "Effect",
+        Values = EffectNames,
+        Default = Library.Scheme.ScreenEffect,
+        Searchable = true,
+        Callback = function(Value)
+            Library:SetScreenEffect(Value)
+        end,
+    })
+
+    ScreenEffectSettings:AddSlider("UISettingsScreenEffectIntensity", {
+        Text = "Intensity",
+        Min = 0,
+        Max = 100,
+        Default = Library.Scheme.ScreenEffectIntensity,
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(Value)
+            Library:SetScreenEffectIntensity(Value)
+        end,
+    })
+
+    ScreenEffectSettings:AddSlider("UISettingsScreenEffectSpeed", {
+        Text = "Speed",
+        Min = 10,
+        Max = 300,
+        Default = Library.Scheme.ScreenEffectSpeed,
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(Value)
+            Library:SetScreenEffectSpeed(Value)
+        end,
+    })
+
+    ScreenEffectSettings:SetupDependencies({
+        { ScreenEffectsToggle, true },
+    })
+
+    GuiEffectsGroup:AddLabel("Effects clipped to the inside of the main GUI window.")
+
+    local GuiEffectsToggle = GuiEffectsGroup:AddToggle("UISettingsGuiEffects", {
+        Text = "Inside GUI Effects",
+        Default = Library.Scheme.GuiEffectsEnabled,
+        Callback = function(Value)
+            Library:SetGuiEffectsEnabled(Value)
+        end,
+    })
+
+    local GuiEffectSettings = GuiEffectsGroup:AddDependencyBox()
+
+    GuiEffectSettings:AddDropdown("UISettingsGuiEffect", {
+        Text = "Effect",
+        Values = EffectNames,
+        Default = Library.Scheme.GuiEffect,
+        Searchable = true,
+        Callback = function(Value)
+            Library:SetGuiEffect(Value)
+        end,
+    })
+
+    GuiEffectSettings:AddSlider("UISettingsGuiEffectIntensity", {
+        Text = "Intensity",
+        Min = 0,
+        Max = 100,
+        Default = Library.Scheme.GuiEffectIntensity,
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(Value)
+            Library:SetGuiEffectIntensity(Value)
+        end,
+    })
+
+    GuiEffectSettings:AddSlider("UISettingsGuiEffectSpeed", {
+        Text = "Speed",
+        Min = 10,
+        Max = 300,
+        Default = Library.Scheme.GuiEffectSpeed,
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(Value)
+            Library:SetGuiEffectSpeed(Value)
+        end,
+    })
+
+    GuiEffectSettings:SetupDependencies({
+        { GuiEffectsToggle, true },
+    })
+
+    local SettingsData = {
+        Window = Window,
+        Tab = SettingsTab,
+        Pages = Pages,
+        Watermark = Watermark,
+        Groups = {
+            Menu = MenuGroup,
+            Window = WindowGroup,
+            Watermark = WatermarkGroup,
+            ScreenEffects = ScreenEffectsGroup,
+            GuiEffects = GuiEffectsGroup,
+            Themes = ThemesGroup,
+            Configs = ConfigsGroup,
+        },
+        ThemeManager = nil,
+        SaveManager = nil,
+    }
+
+    Library.SettingsTab = SettingsData
+
+    if SettingsInfo.LoadManagers ~= false then
+        task.spawn(function()
+            local ThemeManager = SettingsInfo.ThemeManager
+            local SaveManager = SettingsInfo.SaveManager
+
+            if not ThemeManager then
+                local ThemeSuccess, ThemeResult = pcall(function()
+                    return loadstring(game:HttpGet(
+                        SettingsInfo.ThemeManagerURL
+                            or "https://raw.githubusercontent.com/JaxRol/ZeroPoint/refs/heads/main/GUI/ThemeManager"
+                    ))()
+                end)
+
+                if ThemeSuccess then
+                    ThemeManager = ThemeResult or getgenv().ThemeManager
+                else
+                    warn("ThemeManager failed to load:", ThemeResult)
+                end
+            end
+
+            if not SaveManager then
+                local SaveSuccess, SaveResult = pcall(function()
+                    return loadstring(game:HttpGet(
+                        SettingsInfo.SaveManagerURL
+                            or "https://raw.githubusercontent.com/JaxRol/ZeroPoint/refs/heads/main/GUI/SaveManager"
+                    ))()
+                end)
+
+                if SaveSuccess then
+                    SaveManager = SaveResult or getgenv().SaveManager
+                else
+                    warn("SaveManager failed to load:", SaveResult)
+                end
+            end
+
+            SettingsData.ThemeManager = ThemeManager
+            SettingsData.SaveManager = SaveManager
+
+            if ThemeManager then
+                ThemeManager:SetLibrary(Library)
+                ThemeManager:SetFolder(SettingsInfo.ThemeFolder or "ZeroPoint")
+                ThemeManager:ApplyToGroupbox(ThemesGroup)
+            end
+
+            if SaveManager then
+                SaveManager:SetLibrary(Library)
+                SaveManager:IgnoreThemeSettings()
+                SaveManager:SetIgnoreIndexes({
+                    "MenuKeybind",
+                })
+                SaveManager:SetFolder(SettingsInfo.ConfigFolder or "ZeroPoint")
+                SaveManager:SetSubFolder(SettingsInfo.ConfigSubFolder or ScriptName)
+
+                SaveManager:BuildConfigSection({
+                    AddRightGroupbox = function()
+                        return ConfigsGroup
+                    end,
+                })
+
+                task.defer(function()
+                    SaveManager:LoadAutoloadConfig()
+                end)
+            end
+        end)
+    else
+        ThemesGroup:AddLabel("ThemeManager loading is disabled.")
+        ConfigsGroup:AddLabel("SaveManager loading is disabled.")
+    end
+
+    return SettingsData
 end
 
 getgenv().Library = Library
