@@ -1,5 +1,3 @@
-
-
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -11271,59 +11269,95 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
     local SettingsDescription = SettingsInfo.Description or "Interface configuration, effects, themes, and configs"
     local ShowSubPageNames = SettingsInfo.ShowSubPageNames == true
     local ShowSubPageIcons = SettingsInfo.ShowSubPageIcons ~= false
+    local OneBigSettingsTab = SettingsInfo.OneBigTab == true
+        or SettingsInfo.SinglePage == true
     local EffectNames = Library:GetEffectNames()
 
-    local SettingsTab = Window:AddTab({
-        Name = SettingsName,
-        Icon = SettingsIcon,
-        Description = SettingsDescription,
-    })
+    local SettingsTab
+    local Pages
 
-    local Pages = {
-        Menu = SettingsTab:AddSubPage({
-            Name = "Menu",
-            Icon = "wrench",
-            Description = "General interface behavior",
-            ShowName = ShowSubPageNames,
-            ShowIcon = ShowSubPageIcons,
-        }),
-        Watermark = SettingsTab:AddSubPage({
-            Name = "Watermark",
-            Icon = "monitor",
-            Description = "Watermark display settings",
-            ShowName = ShowSubPageNames,
-            ShowIcon = ShowSubPageIcons,
-        }),
-        Effects = SettingsTab:AddSubPage({
-            Name = "Effects",
-            Icon = "sparkles",
-            Description = "Animated screen and GUI background effects",
-            ShowName = ShowSubPageNames,
-            ShowIcon = ShowSubPageIcons,
-        }),
-        Themes = SettingsTab:AddSubPage({
-            Name = "Themes",
-            Icon = "palette",
-            Description = "Theme and color settings",
-            ShowName = ShowSubPageNames,
-            ShowIcon = ShowSubPageIcons,
-        }),
-        Configs = SettingsTab:AddSubPage({
-            Name = "Configs",
-            Icon = "save",
-            Description = "Save and load configurations",
-            ShowName = ShowSubPageNames,
-            ShowIcon = ShowSubPageIcons,
-        }),
-    }
+    if OneBigSettingsTab then
+        SettingsTab = Window:AddFullSizeTab({
+            Name = SettingsName,
+            Icon = SettingsIcon,
+            Description = SettingsDescription,
+        })
 
-    local MenuGroup = Pages.Menu:AddLeftGroupbox("Interface", "wrench")
-    local WindowGroup = Pages.Menu:AddRightGroupbox("Window", "panel-top")
-    local WatermarkGroup = Pages.Watermark:AddLeftGroupbox("Watermark", "monitor")
-    local ScreenEffectsGroup = Pages.Effects:AddLeftGroupbox("Screen Effects", "monitor-up")
-    local GuiEffectsGroup = Pages.Effects:AddRightGroupbox("GUI Effects", "sparkles")
-    local ThemesGroup = Pages.Themes:AddLeftGroupbox("Themes", "palette")
-    local ConfigsGroup = Pages.Configs:AddLeftGroupbox("Configs", "save")
+        Pages = {
+            Menu = SettingsTab,
+            Watermark = SettingsTab,
+            Effects = SettingsTab,
+            Themes = SettingsTab,
+            Configs = SettingsTab,
+        }
+    else
+        SettingsTab = Window:AddTab({
+            Name = SettingsName,
+            Icon = SettingsIcon,
+            Description = SettingsDescription,
+        })
+
+        Pages = {
+            Menu = SettingsTab:AddSubPage({
+                Name = "Menu",
+                Icon = "wrench",
+                Description = "General interface behavior",
+                ShowName = ShowSubPageNames,
+                ShowIcon = ShowSubPageIcons,
+            }),
+            Watermark = SettingsTab:AddSubPage({
+                Name = "Watermark",
+                Icon = "monitor",
+                Description = "Watermark display settings",
+                ShowName = ShowSubPageNames,
+                ShowIcon = ShowSubPageIcons,
+            }),
+            Effects = SettingsTab:AddSubPage({
+                Name = "Effects",
+                Icon = "sparkles",
+                Description = "Animated screen and GUI background effects",
+                ShowName = ShowSubPageNames,
+                ShowIcon = ShowSubPageIcons,
+            }),
+            Themes = SettingsTab:AddSubPage({
+                Name = "Themes",
+                Icon = "palette",
+                Description = "Theme and color settings",
+                ShowName = ShowSubPageNames,
+                ShowIcon = ShowSubPageIcons,
+            }),
+            Configs = SettingsTab:AddSubPage({
+                Name = "Configs",
+                Icon = "save",
+                Description = "Save and load configurations",
+                ShowName = ShowSubPageNames,
+                ShowIcon = ShowSubPageIcons,
+            }),
+        }
+    end
+
+    local function AddSettingsGroup(Page, Name, Icon, Side)
+        if OneBigSettingsTab then
+            return SettingsTab:AddGroupbox({
+                Name = Name,
+                Icon = Icon,
+            })
+        end
+
+        if Side == 2 then
+            return Page:AddRightGroupbox(Name, Icon)
+        end
+
+        return Page:AddLeftGroupbox(Name, Icon)
+    end
+
+    local MenuGroup = AddSettingsGroup(Pages.Menu, "Interface", "wrench", 1)
+    local WindowGroup = AddSettingsGroup(Pages.Menu, "Window", "panel-top", 2)
+    local WatermarkGroup = AddSettingsGroup(Pages.Watermark, "Watermark", "monitor", 1)
+    local ScreenEffectsGroup = AddSettingsGroup(Pages.Effects, "Screen Effects", "monitor-up", 1)
+    local GuiEffectsGroup = AddSettingsGroup(Pages.Effects, "GUI Effects", "sparkles", 2)
+    local ThemesGroup = AddSettingsGroup(Pages.Themes, "Themes", "palette", 1)
+    local ConfigsGroup = AddSettingsGroup(Pages.Configs, "Configs", "save", 1)
 
     MenuGroup:AddToggle("UISettingsKeybindMenuOpen", {
         Text = "Open Keybind Menu",
@@ -11612,6 +11646,7 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
         Window = Window,
         Tab = SettingsTab,
         Pages = Pages,
+        OneBigTab = OneBigSettingsTab,
         Watermark = Watermark,
         Groups = {
             Menu = MenuGroup,
