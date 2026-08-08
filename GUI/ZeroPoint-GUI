@@ -1268,6 +1268,7 @@ local EffectRandom = Random.new()
 local EffectSystem = {
     Connection = nil,
     Names = EffectNames,
+    ScreenRoot = nil,
     Targets = {
         Screen = {
             Name = "Screen",
@@ -1386,7 +1387,7 @@ local function CreateParticleObject(Target)
     Object.AnchorPoint = Vector2.new(0.5, 0.5)
     Object.Active = false
     Object.Selectable = false
-    Object.ZIndex = Target.Layer and Target.Layer.ZIndex or 1
+    Object.ZIndex = Target.Layer and (Target.Layer.ZIndex + 1) or 2
     Object.Parent = Target.Layer
     return Object
 end
@@ -1589,12 +1590,19 @@ local function RefreshEffectConnection()
 end
 local function SetTargetEnabled(Target, Enabled)
     Target.Enabled = Enabled == true
+
+    if Target == EffectSystem.Targets.Screen and EffectSystem.ScreenRoot then
+        EffectSystem.ScreenRoot.Enabled = Target.Enabled and Library.Toggled
+    end
+
     if Target.Layer then
         Target.Layer.Visible = Target.Enabled and Library.Toggled
     end
+
     if Target.Enabled then
         RefreshTargetParticleCount(Target)
     end
+
     RefreshEffectConnection()
 end
 local function SetTargetEffect(Target, Effect)
@@ -1606,7 +1614,18 @@ local function SetTargetEffect(Target, Effect)
     DestroyTargetParticles(Target)
     RefreshTargetParticleCount(Target)
 end
-local ScreenEffectLayer = CreateEffectLayer("ScreenEffects", ScreenGui, 1)
+local ScreenEffectRoot = Instance.new("ScreenGui")
+ScreenEffectRoot.Name = "ZeroPointScreenEffects"
+ScreenEffectRoot.DisplayOrder = math.max((tonumber(ScreenGui.DisplayOrder) or 999) - 1, 0)
+ScreenEffectRoot.IgnoreGuiInset = true
+ScreenEffectRoot.ResetOnSpawn = false
+ScreenEffectRoot.ZIndexBehavior = Enum.ZIndexBehavior.Global
+ScreenEffectRoot.Enabled = false
+ScreenEffectRoot.Parent = ScreenGui.Parent
+
+EffectSystem.ScreenRoot = ScreenEffectRoot
+
+local ScreenEffectLayer = CreateEffectLayer("ScreenEffects", ScreenEffectRoot, 1)
 EffectSystem.Targets.Screen.Layer = ScreenEffectLayer
 function Library:GetEffectNames()
     local Names = {}
@@ -2687,9 +2706,15 @@ function Library:Unload()
     if Library.ActiveLoading then
         Library.ActiveLoading:Destroy()
     end
+    if EffectSystem and EffectSystem.ScreenRoot then
+        EffectSystem.ScreenRoot:Destroy()
+        EffectSystem.ScreenRoot = nil
+    end
+
     if ScreenGui then
         ScreenGui:Destroy()
     end
+
     getgenv().Library = nil
 end
 local CheckIcon = Library:GetIcon("check")
@@ -6815,6 +6840,31 @@ function Library:CreateWindow(WindowInfo)
         GuiEffectCorner.Parent = GuiEffectLayer
         table.insert(Library.Corners, GuiEffectCorner)
         EffectSystem.Targets.Gui.Layer = GuiEffectLayer
+
+        local function KeepGuiContentAboveEffects(Instance)
+            if not Instance:IsA("GuiObject") then
+                return
+            end
+
+            if Instance == GuiEffectLayer or Instance:IsDescendantOf(GuiEffectLayer) then
+                return
+            end
+
+            if Instance.ZIndex <= 2 then
+                Instance.ZIndex = 3
+            end
+        end
+
+        Library:GiveSignal(MainFrame.DescendantAdded:Connect(function(Instance)
+            task.defer(function()
+                if Library.Unloaded or not Instance.Parent then
+                    return
+                end
+
+                KeepGuiContentAboveEffects(Instance)
+            end)
+        end))
+
         table.insert(
             Library.Corners,
             New("UICorner", {
@@ -8141,7 +8191,6 @@ function Library:CreateWindow(WindowInfo)
                 TabLeft.Position = UDim2.new(0, 0, 0, Offset)
                 TabLeft.Size = UDim2.new(1, 0, 1, -Offset)
                 TabLeft.Visible = true
-
                 TabRight.Visible = false
                 return
             end
@@ -8162,17 +8211,25 @@ function Library:CreateWindow(WindowInfo)
 
             for _, Groupbox in Tab.Groupboxes do
                 if Groupbox and Groupbox.BoxHolder then
-                    Groupbox.BoxHolder.Parent = Tab.SingleColumn
-                        and TabLeft
-                        or (Groupbox.Side == 2 and TabRight or TabLeft)
+                    if Tab.SingleColumn then
+                        Groupbox.BoxHolder.Parent = TabLeft
+                    elseif Groupbox.Side == 2 then
+                        Groupbox.BoxHolder.Parent = TabRight
+                    else
+                        Groupbox.BoxHolder.Parent = TabLeft
+                    end
                 end
             end
 
             for _, Tabbox in Tab.Tabboxes do
                 if Tabbox and Tabbox.BoxHolder then
-                    Tabbox.BoxHolder.Parent = Tab.SingleColumn
-                        and TabLeft
-                        or (Tabbox.Side == 2 and TabRight or TabLeft)
+                    if Tab.SingleColumn then
+                        Tabbox.BoxHolder.Parent = TabLeft
+                    elseif Tabbox.Side == 2 then
+                        Tabbox.BoxHolder.Parent = TabRight
+                    else
+                        Tabbox.BoxHolder.Parent = TabLeft
+                    end
                 end
             end
 
@@ -10104,6 +10161,10 @@ function Library:CreateWindow(WindowInfo)
         local ScreenEffectTarget = EffectSystem.Targets.Screen
         local GuiEffectTarget = EffectSystem.Targets.Gui
 
+        if EffectSystem.ScreenRoot then
+            EffectSystem.ScreenRoot.Enabled = ScreenEffectTarget.Enabled and Library.Toggled
+        end
+
         if ScreenEffectTarget.Layer then
             ScreenEffectTarget.Layer.Visible = ScreenEffectTarget.Enabled and Library.Toggled
         end
@@ -11311,7 +11372,6 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
     local ShowSubPageNames = SettingsInfo.ShowSubPageNames == true
     local ShowSubPageIcons = SettingsInfo.ShowSubPageIcons ~= false
     local OneBigSettingsTab = SettingsInfo.OneBigTab == true
-        or SettingsInfo.SinglePage == true
     local EffectNames = Library:GetEffectNames()
 
     local SettingsTab = Window:AddTab({
@@ -11360,21 +11420,13 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
 
     SettingsTab:SetSingleColumn(OneBigSettingsTab)
 
-    local function AddSettingsGroup(Page, Name, Icon, Side)
-        if Side == 2 then
-            return Page:AddRightGroupbox(Name, Icon)
-        end
-
-        return Page:AddLeftGroupbox(Name, Icon)
-    end
-
-    local MenuGroup = AddSettingsGroup(Pages.Menu, "Interface", "wrench", 1)
-    local WindowGroup = AddSettingsGroup(Pages.Menu, "Window", "panel-top", 2)
-    local WatermarkGroup = AddSettingsGroup(Pages.Watermark, "Watermark", "monitor", 1)
-    local ScreenEffectsGroup = AddSettingsGroup(Pages.Effects, "Screen Effects", "monitor-up", 1)
-    local GuiEffectsGroup = AddSettingsGroup(Pages.Effects, "GUI Effects", "sparkles", 2)
-    local ThemesGroup = AddSettingsGroup(Pages.Themes, "Themes", "palette", 1)
-    local ConfigsGroup = AddSettingsGroup(Pages.Configs, "Configs", "save", 1)
+    local MenuGroup = Pages.Menu:AddLeftGroupbox("Interface", "wrench")
+    local WindowGroup = Pages.Menu:AddRightGroupbox("Window", "panel-top")
+    local WatermarkGroup = Pages.Watermark:AddLeftGroupbox("Watermark", "monitor")
+    local ScreenEffectsGroup = Pages.Effects:AddLeftGroupbox("Screen Effects", "monitor-up")
+    local GuiEffectsGroup = Pages.Effects:AddRightGroupbox("GUI Effects", "sparkles")
+    local ThemesGroup = Pages.Themes:AddLeftGroupbox("Themes", "palette")
+    local ConfigsGroup = Pages.Configs:AddLeftGroupbox("Configs", "save")
 
     MenuGroup:AddToggle("UISettingsKeybindMenuOpen", {
         Text = "Open Keybind Menu",
@@ -11660,10 +11712,10 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
     })
 
     local SettingsData = {
+        Library = Library,
         Window = Window,
         Tab = SettingsTab,
         Pages = Pages,
-        OneBigTab = OneBigSettingsTab,
         Watermark = Watermark,
         Groups = {
             Menu = MenuGroup,
