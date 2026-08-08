@@ -11460,7 +11460,8 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
         Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
         Default = tostring(math.floor((Library.DPIScale or 1) * 100 + 0.5)) .. "%",
         Callback = function(Value)
-            local Scale = tonumber((tostring(Value):gsub("%%", "")))
+            local System = (tostring(Value):gsub("%%", ""))
+            local Scale = tonumber(System)
 
             if Scale then
                 Library:SetDPIScale(Scale)
