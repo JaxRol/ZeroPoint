@@ -1,3 +1,4 @@
+```
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -6954,8 +6955,10 @@ function Library:CreateWindow(WindowInfo)
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BackgroundTransparency = 0,
                 ClipsDescendants = true,
+                Active = false,
+                Selectable = false,
                 Size = UDim2.fromScale(1, 1),
-                ZIndex = 3,
+                ZIndex = 8999,
                 Visible = Library.Scheme.GradientEnabled,
                 Parent = MainFrame,
             })
@@ -11498,8 +11501,7 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
         Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
         Default = tostring(math.floor((Library.DPIScale or 1) * 100 + 0.5)) .. "%",
         Callback = function(Value)
-            local System = tostring(Value):gsub("%%", "")
-            local Scale = tonumber(System)
+            local Scale = tonumber(tostring(Value):gsub("%%", ""))
             if Scale then
                 Library:SetDPIScale(Scale)
             end
@@ -11845,3 +11847,4 @@ end
 
 getgenv().Library = Library
 return Library
+```
