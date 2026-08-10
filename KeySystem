@@ -9,6 +9,8 @@ local KeySystem = {
 
 	Config = {
 		Name = "ZeroPointKeySystem",
+		Folder = "ZeroPoint",
+		KeyFile = "ZeroPoint/Key.txt",
 
 		KeyLink = "https://ads.luarmor.net/get_key?for=Link-kuzvsbvNJEmd",
 		DiscordInvite = "https://discord.gg/Nk44e68bmn",
@@ -25,6 +27,8 @@ local KeySystem = {
 	State = {
 		Busy = false,
 		KeyApi = nil,
+		SavedKey = nil,
+		SavedKeyMessage = nil,
 	},
 
 	UI = {},
@@ -60,6 +64,15 @@ function KeySystem.Functions.IsFreeScript()
 	return GameData.FFA == true
 end
 
+function KeySystem.Functions.CleanKey(Key)
+	if type(Key) ~= "string" then
+		return ""
+	end
+
+	local Cleaned = Key:gsub("%s+", "")
+	return Cleaned
+end
+
 function KeySystem.Functions.Destroy()
 	if KeySystem.UI.ScreenGui then
 		KeySystem.UI.ScreenGui:Destroy()
@@ -67,16 +80,66 @@ function KeySystem.Functions.Destroy()
 	end
 end
 
+function KeySystem.Functions.SaveKey(Key)
+	if type(writefile) ~= "function" then
+		return false
+	end
+
+	if type(makefolder) == "function" then
+		if type(isfolder) == "function" then
+			if not isfolder(KeySystem.Config.Folder) then
+				pcall(makefolder, KeySystem.Config.Folder)
+			end
+		else
+			pcall(makefolder, KeySystem.Config.Folder)
+		end
+	end
+
+	local Success = pcall(writefile, KeySystem.Config.KeyFile, Key)
+
+	return Success
+end
+
+function KeySystem.Functions.ReadKey()
+	if type(readfile) ~= "function" then
+		return nil
+	end
+
+	if type(isfile) == "function" and not isfile(KeySystem.Config.KeyFile) then
+		return nil
+	end
+
+	local Success, Result = pcall(readfile, KeySystem.Config.KeyFile)
+
+	if not Success or type(Result) ~= "string" then
+		return nil
+	end
+
+	local Key = KeySystem.Functions.CleanKey(Result)
+
+	if Key == "" then
+		return nil
+	end
+
+	return Key
+end
+
 function KeySystem.Functions.CopyLink(Link, Button)
 	if type(setclipboard) ~= "function" then
-		KeySystem.UI.Status.Text = "Clipboard is not supported."
-		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		if KeySystem.UI.Status then
+			KeySystem.UI.Status.Text = "Clipboard is not supported."
+			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		end
+
 		return
 	end
 
 	if not Link or Link == "" then
-		KeySystem.UI.Status.Text = "Link is not configured."
-		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		if KeySystem.UI.Status then
+			KeySystem.UI.Status.Text = "Link is not configured."
+			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		end
+
 		return
 	end
 
@@ -93,7 +156,9 @@ function KeySystem.Functions.CopyLink(Link, Button)
 end
 
 function KeySystem.Functions.ValidateKey(Key)
-	if not Key or Key == "" then
+	Key = KeySystem.Functions.CleanKey(Key)
+
+	if Key == "" then
 		return false, "Enter a key."
 	end
 
@@ -163,7 +228,7 @@ function KeySystem.Functions.SubmitKey()
 		return
 	end
 
-	local Key = KeySystem.UI.KeyBox.Text:gsub("%s+", "")
+	local Key = KeySystem.Functions.CleanKey(KeySystem.UI.KeyBox.Text)
 	KeySystem.UI.KeyBox.Text = Key
 
 	if Key == "" then
@@ -187,6 +252,8 @@ function KeySystem.Functions.SubmitKey()
 		KeySystem.State.Busy = false
 		return
 	end
+
+	KeySystem.Functions.SaveKey(Key)
 
 	script_key = Key
 
@@ -269,7 +336,7 @@ function KeySystem.Functions.CreateGui()
 	KeyBox.Font = Enum.Font.Gotham
 	KeyBox.PlaceholderText = "Enter key..."
 	KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
-	KeyBox.Text = ""
+	KeyBox.Text = KeySystem.State.SavedKey or ""
 	KeyBox.TextColor3 = Color3.fromRGB(230, 230, 235)
 	KeyBox.TextSize = 14
 	KeyBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -346,8 +413,8 @@ function KeySystem.Functions.CreateGui()
 	Status.Position = UDim2.fromOffset(20, 240)
 	Status.Size = UDim2.new(1, -40, 0, 18)
 	Status.Font = Enum.Font.Gotham
-	Status.Text = ""
-	Status.TextColor3 = Color3.fromRGB(150, 150, 160)
+	Status.Text = KeySystem.State.SavedKeyMessage or ""
+	Status.TextColor3 = KeySystem.State.SavedKeyMessage and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(150, 150, 160)
 	Status.TextSize = 12
 	Status.TextXAlignment = Enum.TextXAlignment.Left
 	Status.Parent = Background
@@ -449,6 +516,29 @@ function KeySystem.Functions.Start()
 		end
 
 		return
+	end
+
+	local SavedKey = KeySystem.Functions.ReadKey()
+
+	if SavedKey then
+		local Valid, Message = KeySystem.Functions.ValidateKey(SavedKey)
+
+		if Valid then
+			script_key = SavedKey
+
+			local Loaded, LoadError = KeySystem.Functions.LoadGameScript()
+
+			if not Loaded then
+				warn("[Zero Point] Failed to load script:", LoadError)
+			end
+
+			return
+		end
+
+		script_key = nil
+
+		KeySystem.State.SavedKey = SavedKey
+		KeySystem.State.SavedKeyMessage = Message or "Saved key is no longer valid."
 	end
 
 	KeySystem.Functions.CreateGui()
