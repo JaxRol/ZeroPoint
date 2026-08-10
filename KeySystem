@@ -10,10 +10,14 @@ local KeySystem = {
 	Config = {
 		Name = "ZeroPointKeySystem",
 
+		KeyLink = "https://ads.luarmor.net/get_key?for=Link-kuzvsbvNJEmd",
+		DiscordInvite = "https://discord.gg/Nk44e68bmn",
+
 		Games = {
 			[66654135] = {
 				ScriptId = "060693a42eb51e4037baa82f218c5915",
 				Loader = "https://api.luarmor.net/files/v4/loaders/060693a42eb51e4037baa82f218c5915.lua",
+				FFA = false,
 			},
 		},
 	},
@@ -46,11 +50,46 @@ function KeySystem.Functions.GetGameData()
 	return KeySystem.Config.Games[game.GameId] or KeySystem.Config.Games[game.PlaceId]
 end
 
+function KeySystem.Functions.IsFreeScript()
+	local GameData = KeySystem.Functions.GetGameData()
+
+	if not GameData then
+		return false
+	end
+
+	return GameData.FFA == true
+end
+
 function KeySystem.Functions.Destroy()
 	if KeySystem.UI.ScreenGui then
 		KeySystem.UI.ScreenGui:Destroy()
 		KeySystem.UI.ScreenGui = nil
 	end
+end
+
+function KeySystem.Functions.CopyLink(Link, Button)
+	if type(setclipboard) ~= "function" then
+		KeySystem.UI.Status.Text = "Clipboard is not supported."
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		return
+	end
+
+	if not Link or Link == "" then
+		KeySystem.UI.Status.Text = "Link is not configured."
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		return
+	end
+
+	local OriginalText = Button.Text
+
+	setclipboard(Link)
+	Button.Text = "Link Copied"
+
+	task.delay(1.5, function()
+		if Button and Button.Parent then
+			Button.Text = OriginalText
+		end
+	end)
 end
 
 function KeySystem.Functions.ValidateKey(Key)
@@ -62,6 +101,10 @@ function KeySystem.Functions.ValidateKey(Key)
 
 	if not GameData then
 		return false, "This game is not supported."
+	end
+
+	if GameData.FFA then
+		return true, "Free script."
 	end
 
 	if not KeySystem.State.KeyApi then
@@ -176,7 +219,7 @@ function KeySystem.Functions.CreateGui()
 	Background.Name = "Background"
 	Background.AnchorPoint = Vector2.new(0.5, 0.5)
 	Background.Position = UDim2.fromScale(0.5, 0.5)
-	Background.Size = UDim2.fromOffset(370, 220)
+	Background.Size = UDim2.fromOffset(370, 270)
 	Background.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 	Background.BorderSizePixel = 0
 	Background.Parent = ScreenGui
@@ -260,10 +303,47 @@ function KeySystem.Functions.CreateGui()
 	SubmitCorner.CornerRadius = UDim.new(0, 6)
 	SubmitCorner.Parent = Submit
 
+	local GetKey = Instance.new("TextButton")
+	GetKey.Name = "GetKey"
+	GetKey.Position = UDim2.fromOffset(20, 195)
+	GetKey.Size = UDim2.new(0.5, -25, 0, 38)
+	GetKey.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	GetKey.BorderSizePixel = 0
+	GetKey.AutoButtonColor = false
+	GetKey.Font = Enum.Font.GothamMedium
+	GetKey.Text = "Get Key"
+	GetKey.TextColor3 = Color3.fromRGB(230, 230, 235)
+	GetKey.TextSize = 14
+	GetKey.Parent = Background
+	KeySystem.UI.GetKey = GetKey
+
+	local GetKeyCorner = Instance.new("UICorner")
+	GetKeyCorner.CornerRadius = UDim.new(0, 6)
+	GetKeyCorner.Parent = GetKey
+
+	local Discord = Instance.new("TextButton")
+	Discord.Name = "Discord"
+	Discord.AnchorPoint = Vector2.new(1, 0)
+	Discord.Position = UDim2.new(1, -20, 0, 195)
+	Discord.Size = UDim2.new(0.5, -25, 0, 38)
+	Discord.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	Discord.BorderSizePixel = 0
+	Discord.AutoButtonColor = false
+	Discord.Font = Enum.Font.GothamMedium
+	Discord.Text = "Discord"
+	Discord.TextColor3 = Color3.fromRGB(230, 230, 235)
+	Discord.TextSize = 14
+	Discord.Parent = Background
+	KeySystem.UI.Discord = Discord
+
+	local DiscordCorner = Instance.new("UICorner")
+	DiscordCorner.CornerRadius = UDim.new(0, 6)
+	DiscordCorner.Parent = Discord
+
 	local Status = Instance.new("TextLabel")
 	Status.Name = "Status"
 	Status.BackgroundTransparency = 1
-	Status.Position = UDim2.fromOffset(20, 188)
+	Status.Position = UDim2.fromOffset(20, 240)
 	Status.Size = UDim2.new(1, -40, 0, 18)
 	Status.Font = Enum.Font.Gotham
 	Status.Text = ""
@@ -288,6 +368,14 @@ function KeySystem.Functions.CreateGui()
 
 	Submit.MouseButton1Click:Connect(KeySystem.Functions.SubmitKey)
 
+	GetKey.MouseButton1Click:Connect(function()
+		KeySystem.Functions.CopyLink(KeySystem.Config.KeyLink, GetKey)
+	end)
+
+	Discord.MouseButton1Click:Connect(function()
+		KeySystem.Functions.CopyLink(KeySystem.Config.DiscordInvite, Discord)
+	end)
+
 	KeyBox.FocusLost:Connect(function(EnterPressed)
 		if EnterPressed then
 			KeySystem.Functions.SubmitKey()
@@ -306,6 +394,30 @@ function KeySystem.Functions.CreateGui()
 		}):Play()
 	end)
 
+	GetKey.MouseEnter:Connect(function()
+		KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(38, 38, 46),
+		}):Play()
+	end)
+
+	GetKey.MouseLeave:Connect(function()
+		KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(28, 28, 34),
+		}):Play()
+	end)
+
+	Discord.MouseEnter:Connect(function()
+		KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(38, 38, 46),
+		}):Play()
+	end)
+
+	Discord.MouseLeave:Connect(function()
+		KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(28, 28, 34),
+		}):Play()
+	end)
+
 	Close.MouseButton1Click:Connect(KeySystem.Functions.Destroy)
 
 	Close.MouseEnter:Connect(function()
@@ -321,4 +433,25 @@ function KeySystem.Functions.CreateGui()
 	end)
 end
 
-KeySystem.Functions.CreateGui()
+function KeySystem.Functions.Start()
+	local GameData = KeySystem.Functions.GetGameData()
+
+	if not GameData then
+		warn("[Zero Point] This game is not supported.")
+		return
+	end
+
+	if KeySystem.Functions.IsFreeScript() then
+		local Loaded, LoadError = KeySystem.Functions.LoadGameScript()
+
+		if not Loaded then
+			warn("[Zero Point] Failed to load script:", LoadError)
+		end
+
+		return
+	end
+
+	KeySystem.Functions.CreateGui()
+end
+
+KeySystem.Functions.Start()
