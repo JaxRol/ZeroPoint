@@ -1,0 +1,324 @@
+repeat task.wait() until game:IsLoaded()
+
+local KeySystem = {
+	Services = {
+		Players = game:GetService("Players"),
+		CoreGui = game:GetService("CoreGui"),
+		TweenService = game:GetService("TweenService"),
+	},
+
+	Config = {
+		Name = "ZeroPointKeySystem",
+
+		Games = {
+			[66654135] = {
+				ScriptId = "060693a42eb51e4037baa82f218c5915",
+				Loader = "https://api.luarmor.net/files/v4/loaders/060693a42eb51e4037baa82f218c5915.lua",
+			},
+		},
+	},
+
+	State = {
+		Busy = false,
+		KeyApi = nil,
+	},
+
+	UI = {},
+
+	Functions = {},
+}
+
+KeySystem.Services.Player = KeySystem.Services.Players.LocalPlayer
+
+function KeySystem.Functions.GetGuiParent()
+	if type(gethui) == "function" then
+		local Success, Result = pcall(gethui)
+
+		if Success and typeof(Result) == "Instance" then
+			return Result
+		end
+	end
+
+	return KeySystem.Services.CoreGui
+end
+
+function KeySystem.Functions.GetGameData()
+	return KeySystem.Config.Games[game.GameId] or KeySystem.Config.Games[game.PlaceId]
+end
+
+function KeySystem.Functions.Destroy()
+	if KeySystem.UI.ScreenGui then
+		KeySystem.UI.ScreenGui:Destroy()
+		KeySystem.UI.ScreenGui = nil
+	end
+end
+
+function KeySystem.Functions.ValidateKey(Key)
+	if not Key or Key == "" then
+		return false, "Enter a key."
+	end
+
+	local GameData = KeySystem.Functions.GetGameData()
+
+	if not GameData then
+		return false, "This game is not supported."
+	end
+
+	if not KeySystem.State.KeyApi then
+		local Success, Result = pcall(function()
+			return loadstring(game:HttpGet("https://sdkapi-public.luarmor.net/library.lua"))()
+		end)
+
+		if not Success or type(Result) ~= "table" then
+			return false, "Failed to load Luarmor key API."
+		end
+
+		KeySystem.State.KeyApi = Result
+	end
+
+	KeySystem.State.KeyApi.script_id = GameData.ScriptId
+
+	local Success, Status = pcall(function()
+		return KeySystem.State.KeyApi.check_key(Key)
+	end)
+
+	if not Success then
+		return false, "Failed to check key."
+	end
+
+	if type(Status) ~= "table" then
+		return false, "Invalid response from Luarmor."
+	end
+
+	if Status.code ~= "KEY_VALID" then
+		return false, Status.message or Status.code or "Invalid key."
+	end
+
+	return true, "Key validated."
+end
+
+function KeySystem.Functions.LoadGameScript()
+	local GameData = KeySystem.Functions.GetGameData()
+
+	if not GameData then
+		return false, "This game is not supported."
+	end
+
+	local Success, Error = pcall(function()
+		loadstring(game:HttpGet(GameData.Loader))()
+	end)
+
+	if not Success then
+		return false, tostring(Error)
+	end
+
+	return true
+end
+
+function KeySystem.Functions.SubmitKey()
+	if KeySystem.State.Busy then
+		return
+	end
+
+	local Key = KeySystem.UI.KeyBox.Text:gsub("%s+", "")
+	KeySystem.UI.KeyBox.Text = Key
+
+	if Key == "" then
+		KeySystem.UI.Status.Text = "Please enter a key."
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		return
+	end
+
+	KeySystem.State.Busy = true
+
+	KeySystem.UI.Submit.Text = "Validating..."
+	KeySystem.UI.Status.Text = "Checking key..."
+	KeySystem.UI.Status.TextColor3 = Color3.fromRGB(170, 170, 180)
+
+	local Valid, Message = KeySystem.Functions.ValidateKey(Key)
+
+	if not Valid then
+		KeySystem.UI.Status.Text = Message or "Invalid key."
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		KeySystem.UI.Submit.Text = "Validate Key"
+		KeySystem.State.Busy = false
+		return
+	end
+
+	script_key = Key
+
+	KeySystem.Functions.Destroy()
+
+	local Loaded, LoadError = KeySystem.Functions.LoadGameScript()
+
+	if not Loaded then
+		warn("[Zero Point] Failed to load script:", LoadError)
+	end
+end
+
+function KeySystem.Functions.CreateGui()
+	local GuiParent = KeySystem.Functions.GetGuiParent()
+	local OldGui = GuiParent:FindFirstChild(KeySystem.Config.Name)
+
+	if OldGui then
+		OldGui:Destroy()
+	end
+
+	local ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = KeySystem.Config.Name
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.IgnoreGuiInset = true
+	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	ScreenGui.Parent = GuiParent
+	KeySystem.UI.ScreenGui = ScreenGui
+
+	local Background = Instance.new("Frame")
+	Background.Name = "Background"
+	Background.AnchorPoint = Vector2.new(0.5, 0.5)
+	Background.Position = UDim2.fromScale(0.5, 0.5)
+	Background.Size = UDim2.fromOffset(370, 220)
+	Background.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+	Background.BorderSizePixel = 0
+	Background.Parent = ScreenGui
+	KeySystem.UI.Background = Background
+
+	local BackgroundCorner = Instance.new("UICorner")
+	BackgroundCorner.CornerRadius = UDim.new(0, 10)
+	BackgroundCorner.Parent = Background
+
+	local BackgroundStroke = Instance.new("UIStroke")
+	BackgroundStroke.Color = Color3.fromRGB(50, 50, 60)
+	BackgroundStroke.Thickness = 1
+	BackgroundStroke.Parent = Background
+
+	local Title = Instance.new("TextLabel")
+	Title.Name = "Title"
+	Title.BackgroundTransparency = 1
+	Title.Position = UDim2.fromOffset(20, 18)
+	Title.Size = UDim2.new(1, -40, 0, 30)
+	Title.Font = Enum.Font.GothamBold
+	Title.Text = "Zero Point"
+	Title.TextColor3 = Color3.fromRGB(240, 240, 245)
+	Title.TextSize = 21
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = Background
+
+	local Description = Instance.new("TextLabel")
+	Description.Name = "Description"
+	Description.BackgroundTransparency = 1
+	Description.Position = UDim2.fromOffset(20, 51)
+	Description.Size = UDim2.new(1, -40, 0, 24)
+	Description.Font = Enum.Font.Gotham
+	Description.Text = "Enter your license key to continue."
+	Description.TextColor3 = Color3.fromRGB(150, 150, 160)
+	Description.TextSize = 13
+	Description.TextXAlignment = Enum.TextXAlignment.Left
+	Description.Parent = Background
+
+	local KeyBox = Instance.new("TextBox")
+	KeyBox.Name = "KeyBox"
+	KeyBox.Position = UDim2.fromOffset(20, 90)
+	KeyBox.Size = UDim2.new(1, -40, 0, 42)
+	KeyBox.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	KeyBox.BorderSizePixel = 0
+	KeyBox.ClearTextOnFocus = false
+	KeyBox.MultiLine = false
+	KeyBox.Font = Enum.Font.Gotham
+	KeyBox.PlaceholderText = "Enter key..."
+	KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
+	KeyBox.Text = ""
+	KeyBox.TextColor3 = Color3.fromRGB(230, 230, 235)
+	KeyBox.TextSize = 14
+	KeyBox.TextXAlignment = Enum.TextXAlignment.Left
+	KeyBox.Parent = Background
+	KeySystem.UI.KeyBox = KeyBox
+
+	local KeyPadding = Instance.new("UIPadding")
+	KeyPadding.PaddingLeft = UDim.new(0, 12)
+	KeyPadding.PaddingRight = UDim.new(0, 12)
+	KeyPadding.Parent = KeyBox
+
+	local KeyCorner = Instance.new("UICorner")
+	KeyCorner.CornerRadius = UDim.new(0, 6)
+	KeyCorner.Parent = KeyBox
+
+	local Submit = Instance.new("TextButton")
+	Submit.Name = "Submit"
+	Submit.Position = UDim2.fromOffset(20, 145)
+	Submit.Size = UDim2.new(1, -40, 0, 38)
+	Submit.BackgroundColor3 = Color3.fromRGB(75, 90, 255)
+	Submit.BorderSizePixel = 0
+	Submit.AutoButtonColor = false
+	Submit.Font = Enum.Font.GothamMedium
+	Submit.Text = "Validate Key"
+	Submit.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Submit.TextSize = 14
+	Submit.Parent = Background
+	KeySystem.UI.Submit = Submit
+
+	local SubmitCorner = Instance.new("UICorner")
+	SubmitCorner.CornerRadius = UDim.new(0, 6)
+	SubmitCorner.Parent = Submit
+
+	local Status = Instance.new("TextLabel")
+	Status.Name = "Status"
+	Status.BackgroundTransparency = 1
+	Status.Position = UDim2.fromOffset(20, 188)
+	Status.Size = UDim2.new(1, -40, 0, 18)
+	Status.Font = Enum.Font.Gotham
+	Status.Text = ""
+	Status.TextColor3 = Color3.fromRGB(150, 150, 160)
+	Status.TextSize = 12
+	Status.TextXAlignment = Enum.TextXAlignment.Left
+	Status.Parent = Background
+	KeySystem.UI.Status = Status
+
+	local Close = Instance.new("TextButton")
+	Close.Name = "Close"
+	Close.AnchorPoint = Vector2.new(1, 0)
+	Close.Position = UDim2.new(1, -10, 0, 10)
+	Close.Size = UDim2.fromOffset(30, 30)
+	Close.BackgroundTransparency = 1
+	Close.Font = Enum.Font.GothamBold
+	Close.Text = "X"
+	Close.TextColor3 = Color3.fromRGB(170, 170, 180)
+	Close.TextSize = 24
+	Close.Parent = Background
+	KeySystem.UI.Close = Close
+
+	Submit.MouseButton1Click:Connect(KeySystem.Functions.SubmitKey)
+
+	KeyBox.FocusLost:Connect(function(EnterPressed)
+		if EnterPressed then
+			KeySystem.Functions.SubmitKey()
+		end
+	end)
+
+	Submit.MouseEnter:Connect(function()
+		KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(90, 105, 255),
+		}):Play()
+	end)
+
+	Submit.MouseLeave:Connect(function()
+		KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(75, 90, 255),
+		}):Play()
+	end)
+
+	Close.MouseButton1Click:Connect(KeySystem.Functions.Destroy)
+
+	Close.MouseEnter:Connect(function()
+		KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
+			TextColor3 = Color3.fromRGB(255, 100, 100),
+		}):Play()
+	end)
+
+	Close.MouseLeave:Connect(function()
+		KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
+			TextColor3 = Color3.fromRGB(170, 170, 180),
+		}):Play()
+	end)
+end
+
+KeySystem.Functions.CreateGui()
