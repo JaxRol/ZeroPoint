@@ -1,5 +1,5 @@
 repeat task.wait() until game:IsLoaded()
-
+local Header = "https://api.luarmor.net/files/v4/loaders/"
 local KeySystem = {
 	Services = {
 		Players = game:GetService("Players"),
@@ -12,13 +12,14 @@ local KeySystem = {
 		Folder = "ZeroPoint",
 		KeyFile = "ZeroPoint/Key.txt",
 
-		KeyLink = "https://ads.luarmor.net/get_key?for=Link-kuzvsbvNJEmd",
+		LinkvertiseLink = "https://ads.luarmor.net/get_key?for=Link-kuzvsbvNJEmd",
+		WorkInkLink = "https://ads.luarmor.net/get_key?for=work-JnToxNyHzcYw",
 		DiscordInvite = "https://discord.gg/Nk44e68bmn",
 
 		Games = {
 			[66654135] = {
 				ScriptId = "060693a42eb51e4037baa82f218c5915",
-				Loader = "https://api.luarmor.net/files/v4/loaders/060693a42eb51e4037baa82f218c5915.lua",
+				Loader = Header .."060693a42eb51e4037baa82f218c5915.lua",
 				FFA = false,
 			},
 		},
@@ -128,7 +129,7 @@ function KeySystem.Functions.CopyLink(Link, Button)
 	if type(setclipboard) ~= "function" then
 		if KeySystem.UI.Status then
 			KeySystem.UI.Status.Text = "Clipboard is not supported."
-			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 50, 50)
 		end
 
 		return
@@ -137,7 +138,7 @@ function KeySystem.Functions.CopyLink(Link, Button)
 	if not Link or Link == "" then
 		if KeySystem.UI.Status then
 			KeySystem.UI.Status.Text = "Link is not configured."
-			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+			KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 50, 50)
 		end
 
 		return
@@ -233,7 +234,7 @@ function KeySystem.Functions.SubmitKey()
 
 	if Key == "" then
 		KeySystem.UI.Status.Text = "Please enter a key."
-		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 50, 50)
 		return
 	end
 
@@ -241,13 +242,13 @@ function KeySystem.Functions.SubmitKey()
 
 	KeySystem.UI.Submit.Text = "Validating..."
 	KeySystem.UI.Status.Text = "Checking key..."
-	KeySystem.UI.Status.TextColor3 = Color3.fromRGB(170, 170, 180)
+	KeySystem.UI.Status.TextColor3 = Color3.fromRGB(127, 127, 127)
 
 	local Valid, Message = KeySystem.Functions.ValidateKey(Key)
 
 	if not Valid then
 		KeySystem.UI.Status.Text = Message or "Invalid key."
-		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 100, 100)
+		KeySystem.UI.Status.TextColor3 = Color3.fromRGB(255, 50, 50)
 		KeySystem.UI.Submit.Text = "Validate Key"
 		KeySystem.State.Busy = false
 		return
@@ -286,58 +287,158 @@ function KeySystem.Functions.CreateGui()
 	Background.Name = "Background"
 	Background.AnchorPoint = Vector2.new(0.5, 0.5)
 	Background.Position = UDim2.fromScale(0.5, 0.5)
-	Background.Size = UDim2.fromOffset(370, 270)
-	Background.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+	Background.Size = UDim2.fromOffset(520, 340)
+	Background.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 	Background.BorderSizePixel = 0
 	Background.Parent = ScreenGui
 	KeySystem.UI.Background = Background
 
 	local BackgroundCorner = Instance.new("UICorner")
-	BackgroundCorner.CornerRadius = UDim.new(0, 10)
+	BackgroundCorner.CornerRadius = UDim.new(0, 4)
 	BackgroundCorner.Parent = Background
 
 	local BackgroundStroke = Instance.new("UIStroke")
-	BackgroundStroke.Color = Color3.fromRGB(50, 50, 60)
+	BackgroundStroke.Color = Color3.fromRGB(40, 40, 40)
 	BackgroundStroke.Thickness = 1
 	BackgroundStroke.Parent = Background
 
 	local Title = Instance.new("TextLabel")
 	Title.Name = "Title"
 	Title.BackgroundTransparency = 1
-	Title.Position = UDim2.fromOffset(20, 18)
-	Title.Size = UDim2.new(1, -40, 0, 30)
-	Title.Font = Enum.Font.GothamBold
+	Title.Position = UDim2.fromOffset(0, 0)
+	Title.Size = UDim2.fromOffset(155, 48)
+	Title.Font = Enum.Font.GothamBlack
 	Title.Text = "Zero Point"
-	Title.TextColor3 = Color3.fromRGB(240, 240, 245)
-	Title.TextSize = 21
-	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Title.TextSize = 20
+	Title.TextXAlignment = Enum.TextXAlignment.Center
 	Title.Parent = Background
+
+	local SectionTitle = Instance.new("TextLabel")
+	SectionTitle.Name = "SectionTitle"
+	SectionTitle.BackgroundTransparency = 1
+	SectionTitle.Position = UDim2.fromOffset(171, 0)
+	SectionTitle.Size = UDim2.new(1, -226, 0, 48)
+	SectionTitle.Font = Enum.Font.GothamBlack
+	SectionTitle.Text = "Authentication"
+	SectionTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	SectionTitle.TextSize = 16
+	SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+	SectionTitle.Parent = Background
+
+	local TopDivider = Instance.new("Frame")
+	TopDivider.Name = "TopDivider"
+	TopDivider.Position = UDim2.fromOffset(0, 48)
+	TopDivider.Size = UDim2.new(1, 0, 0, 1)
+	TopDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	TopDivider.BorderSizePixel = 0
+	TopDivider.Parent = Background
+
+	local Sidebar = Instance.new("Frame")
+	Sidebar.Name = "Sidebar"
+	Sidebar.Position = UDim2.fromOffset(0, 49)
+	Sidebar.Size = UDim2.fromOffset(155, 269)
+	Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	Sidebar.BorderSizePixel = 0
+	Sidebar.Parent = Background
+
+	local SidebarDivider = Instance.new("Frame")
+	SidebarDivider.Name = "SidebarDivider"
+	SidebarDivider.Position = UDim2.fromOffset(155, 0)
+	SidebarDivider.Size = UDim2.new(0, 1, 1, -21)
+	SidebarDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	SidebarDivider.BorderSizePixel = 0
+	SidebarDivider.Parent = Background
+
+	local SidebarLabel = Instance.new("TextLabel")
+	SidebarLabel.Name = "SidebarLabel"
+	SidebarLabel.BackgroundTransparency = 1
+	SidebarLabel.Position = UDim2.fromOffset(12, 12)
+	SidebarLabel.Size = UDim2.new(1, -24, 0, 18)
+	SidebarLabel.Font = Enum.Font.GothamBlack
+	SidebarLabel.Text = "MENU"
+	SidebarLabel.TextColor3 = Color3.fromRGB(127, 127, 127)
+	SidebarLabel.TextSize = 11
+	SidebarLabel.TextXAlignment = Enum.TextXAlignment.Left
+	SidebarLabel.Parent = Sidebar
+
+	local ActivePage = Instance.new("Frame")
+	ActivePage.Name = "ActivePage"
+	ActivePage.Position = UDim2.fromOffset(8, 40)
+	ActivePage.Size = UDim2.new(1, -16, 0, 36)
+	ActivePage.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	ActivePage.BorderSizePixel = 0
+	ActivePage.Parent = Sidebar
+
+	local ActivePageCorner = Instance.new("UICorner")
+	ActivePageCorner.CornerRadius = UDim.new(0, 4)
+	ActivePageCorner.Parent = ActivePage
+
+	local ActiveAccent = Instance.new("Frame")
+	ActiveAccent.Name = "Accent"
+	ActiveAccent.Position = UDim2.fromOffset(0, 6)
+	ActiveAccent.Size = UDim2.fromOffset(3, 24)
+	ActiveAccent.BackgroundColor3 = Color3.fromRGB(255, 20, 147)
+	ActiveAccent.BorderSizePixel = 0
+	ActiveAccent.Parent = ActivePage
+
+	local ActiveAccentCorner = Instance.new("UICorner")
+	ActiveAccentCorner.CornerRadius = UDim.new(1, 0)
+	ActiveAccentCorner.Parent = ActiveAccent
+
+	local ActivePageText = Instance.new("TextLabel")
+	ActivePageText.Name = "Text"
+	ActivePageText.BackgroundTransparency = 1
+	ActivePageText.Position = UDim2.fromOffset(14, 0)
+	ActivePageText.Size = UDim2.new(1, -20, 1, 0)
+	ActivePageText.Font = Enum.Font.GothamBlack
+	ActivePageText.Text = "Key System"
+	ActivePageText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ActivePageText.TextSize = 13
+	ActivePageText.TextXAlignment = Enum.TextXAlignment.Left
+	ActivePageText.Parent = ActivePage
+
+	local SidebarHint = Instance.new("TextLabel")
+	SidebarHint.Name = "SidebarHint"
+	SidebarHint.AnchorPoint = Vector2.new(0, 1)
+	SidebarHint.Position = UDim2.new(0, 12, 1, -12)
+	SidebarHint.Size = UDim2.new(1, -24, 0, 34)
+	SidebarHint.BackgroundTransparency = 1
+	SidebarHint.Font = Enum.Font.GothamBlack
+	SidebarHint.Text = "Secure access\nfor Zero Point"
+	SidebarHint.TextColor3 = Color3.fromRGB(127, 127, 127)
+	SidebarHint.TextSize = 11
+	SidebarHint.TextWrapped = true
+	SidebarHint.TextXAlignment = Enum.TextXAlignment.Left
+	SidebarHint.TextYAlignment = Enum.TextYAlignment.Bottom
+	SidebarHint.Parent = Sidebar
 
 	local Description = Instance.new("TextLabel")
 	Description.Name = "Description"
 	Description.BackgroundTransparency = 1
-	Description.Position = UDim2.fromOffset(20, 51)
-	Description.Size = UDim2.new(1, -40, 0, 24)
-	Description.Font = Enum.Font.Gotham
+	Description.Position = UDim2.fromOffset(171, 66)
+	Description.Size = UDim2.new(1, -187, 0, 24)
+	Description.Font = Enum.Font.GothamBlack
 	Description.Text = "Enter your license key to continue."
-	Description.TextColor3 = Color3.fromRGB(150, 150, 160)
-	Description.TextSize = 13
+	Description.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Description.TextTransparency = 0.5
+	Description.TextSize = 12
 	Description.TextXAlignment = Enum.TextXAlignment.Left
 	Description.Parent = Background
 
 	local KeyBox = Instance.new("TextBox")
 	KeyBox.Name = "KeyBox"
-	KeyBox.Position = UDim2.fromOffset(20, 90)
-	KeyBox.Size = UDim2.new(1, -40, 0, 42)
-	KeyBox.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	KeyBox.Position = UDim2.fromOffset(171, 102)
+	KeyBox.Size = UDim2.new(1, -187, 0, 40)
+	KeyBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	KeyBox.BorderSizePixel = 0
 	KeyBox.ClearTextOnFocus = false
 	KeyBox.MultiLine = false
-	KeyBox.Font = Enum.Font.Gotham
+	KeyBox.Font = Enum.Font.GothamBlack
 	KeyBox.PlaceholderText = "Enter key..."
-	KeyBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
+	KeyBox.PlaceholderColor3 = Color3.fromRGB(127, 127, 127)
 	KeyBox.Text = KeySystem.State.SavedKey or ""
-	KeyBox.TextColor3 = Color3.fromRGB(230, 230, 235)
+	KeyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 	KeyBox.TextSize = 14
 	KeyBox.TextXAlignment = Enum.TextXAlignment.Left
 	KeyBox.Parent = Background
@@ -349,72 +450,126 @@ function KeySystem.Functions.CreateGui()
 	KeyPadding.Parent = KeyBox
 
 	local KeyCorner = Instance.new("UICorner")
-	KeyCorner.CornerRadius = UDim.new(0, 6)
+	KeyCorner.CornerRadius = UDim.new(0, 4)
 	KeyCorner.Parent = KeyBox
+
+	local KeyStroke = Instance.new("UIStroke")
+	KeyStroke.Color = Color3.fromRGB(40, 40, 40)
+	KeyStroke.Thickness = 1
+	KeyStroke.Parent = KeyBox
 
 	local Submit = Instance.new("TextButton")
 	Submit.Name = "Submit"
-	Submit.Position = UDim2.fromOffset(20, 145)
-	Submit.Size = UDim2.new(1, -40, 0, 38)
-	Submit.BackgroundColor3 = Color3.fromRGB(75, 90, 255)
+	Submit.Position = UDim2.fromOffset(171, 156)
+	Submit.Size = UDim2.new(1, -187, 0, 36)
+	Submit.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	Submit.BorderSizePixel = 0
 	Submit.AutoButtonColor = false
-	Submit.Font = Enum.Font.GothamMedium
+	Submit.Font = Enum.Font.GothamBlack
 	Submit.Text = "Validate Key"
-	Submit.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Submit.TextColor3 = Color3.fromRGB(15, 15, 15)
 	Submit.TextSize = 14
 	Submit.Parent = Background
 	KeySystem.UI.Submit = Submit
 
 	local SubmitCorner = Instance.new("UICorner")
-	SubmitCorner.CornerRadius = UDim.new(0, 6)
+	SubmitCorner.CornerRadius = UDim.new(0, 4)
 	SubmitCorner.Parent = Submit
+
+	local SubmitStroke = Instance.new("UIStroke")
+	SubmitStroke.Color = Color3.fromRGB(255, 255, 255)
+	SubmitStroke.Thickness = 1
+	SubmitStroke.Parent = Submit
 
 	local GetKey = Instance.new("TextButton")
 	GetKey.Name = "GetKey"
-	GetKey.Position = UDim2.fromOffset(20, 195)
-	GetKey.Size = UDim2.new(0.5, -25, 0, 38)
-	GetKey.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	GetKey.Position = UDim2.fromOffset(171, 206)
+	GetKey.Size = UDim2.new(0.3333, -62, 0, 36)
+	GetKey.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	GetKey.BorderSizePixel = 0
 	GetKey.AutoButtonColor = false
-	GetKey.Font = Enum.Font.GothamMedium
-	GetKey.Text = "Get Key"
-	GetKey.TextColor3 = Color3.fromRGB(230, 230, 235)
+	GetKey.Font = Enum.Font.GothamBlack
+	GetKey.Text = "Linkvertise"
+	GetKey.TextColor3 = Color3.fromRGB(255, 255, 255)
 	GetKey.TextSize = 14
 	GetKey.Parent = Background
 	KeySystem.UI.GetKey = GetKey
 
 	local GetKeyCorner = Instance.new("UICorner")
-	GetKeyCorner.CornerRadius = UDim.new(0, 6)
+	GetKeyCorner.CornerRadius = UDim.new(0, 4)
 	GetKeyCorner.Parent = GetKey
+
+	local GetKeyStroke = Instance.new("UIStroke")
+	GetKeyStroke.Color = Color3.fromRGB(40, 40, 40)
+	GetKeyStroke.Thickness = 1
+	GetKeyStroke.Parent = GetKey
+
+	local WorkInk = Instance.new("TextButton")
+	WorkInk.Name = "WorkInk"
+	WorkInk.AnchorPoint = Vector2.new(0.5, 0)
+	WorkInk.Position = UDim2.fromOffset(337, 206)
+	WorkInk.Size = UDim2.new(0.3333, -62, 0, 36)
+	WorkInk.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	WorkInk.BorderSizePixel = 0
+	WorkInk.AutoButtonColor = false
+	WorkInk.Font = Enum.Font.GothamBlack
+	WorkInk.Text = "Work.ink"
+	WorkInk.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WorkInk.TextSize = 14
+	WorkInk.Parent = Background
+	KeySystem.UI.WorkInk = WorkInk
+
+	local WorkInkCorner = Instance.new("UICorner")
+	WorkInkCorner.CornerRadius = UDim.new(0, 4)
+	WorkInkCorner.Parent = WorkInk
+
+	local WorkInkStroke = Instance.new("UIStroke")
+	WorkInkStroke.Color = Color3.fromRGB(40, 40, 40)
+	WorkInkStroke.Thickness = 1
+	WorkInkStroke.Parent = WorkInk
 
 	local Discord = Instance.new("TextButton")
 	Discord.Name = "Discord"
 	Discord.AnchorPoint = Vector2.new(1, 0)
-	Discord.Position = UDim2.new(1, -20, 0, 195)
-	Discord.Size = UDim2.new(0.5, -25, 0, 38)
-	Discord.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	Discord.Position = UDim2.new(1, -16, 0, 206)
+	Discord.Size = UDim2.new(0.3333, -62, 0, 36)
+	Discord.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	Discord.BorderSizePixel = 0
 	Discord.AutoButtonColor = false
-	Discord.Font = Enum.Font.GothamMedium
+	Discord.Font = Enum.Font.GothamBlack
 	Discord.Text = "Discord"
-	Discord.TextColor3 = Color3.fromRGB(230, 230, 235)
+	Discord.TextColor3 = Color3.fromRGB(255, 255, 255)
 	Discord.TextSize = 14
 	Discord.Parent = Background
 	KeySystem.UI.Discord = Discord
 
 	local DiscordCorner = Instance.new("UICorner")
-	DiscordCorner.CornerRadius = UDim.new(0, 6)
+	DiscordCorner.CornerRadius = UDim.new(0, 4)
 	DiscordCorner.Parent = Discord
+
+	local DiscordStroke = Instance.new("UIStroke")
+	DiscordStroke.Color = Color3.fromRGB(40, 40, 40)
+	DiscordStroke.Thickness = 1
+	DiscordStroke.Parent = Discord
+
+	local BottomDivider = Instance.new("Frame")
+	BottomDivider.Name = "BottomDivider"
+	BottomDivider.Position = UDim2.fromOffset(0, 318)
+	BottomDivider.Size = UDim2.new(1, 0, 0, 1)
+	BottomDivider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	BottomDivider.BorderSizePixel = 0
+	BottomDivider.Parent = Background
 
 	local Status = Instance.new("TextLabel")
 	Status.Name = "Status"
 	Status.BackgroundTransparency = 1
-	Status.Position = UDim2.fromOffset(20, 240)
-	Status.Size = UDim2.new(1, -40, 0, 18)
-	Status.Font = Enum.Font.Gotham
+	Status.Position = UDim2.fromOffset(171, 258)
+	Status.Size = UDim2.new(1, -187, 0, 36)
+	Status.TextWrapped = true
+	Status.TextYAlignment = Enum.TextYAlignment.Top
+	Status.Font = Enum.Font.GothamBlack
 	Status.Text = KeySystem.State.SavedKeyMessage or ""
-	Status.TextColor3 = KeySystem.State.SavedKeyMessage and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(150, 150, 160)
+	Status.TextColor3 = KeySystem.State.SavedKeyMessage and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(127, 127, 127)
 	Status.TextSize = 12
 	Status.TextXAlignment = Enum.TextXAlignment.Left
 	Status.Parent = Background
@@ -423,20 +578,25 @@ function KeySystem.Functions.CreateGui()
 	local Close = Instance.new("TextButton")
 	Close.Name = "Close"
 	Close.AnchorPoint = Vector2.new(1, 0)
-	Close.Position = UDim2.new(1, -10, 0, 10)
+	Close.Position = UDim2.new(1, -9, 0, 9)
 	Close.Size = UDim2.fromOffset(30, 30)
 	Close.BackgroundTransparency = 1
-	Close.Font = Enum.Font.GothamBold
+	Close.Font = Enum.Font.GothamBlack
 	Close.Text = "X"
-	Close.TextColor3 = Color3.fromRGB(170, 170, 180)
-	Close.TextSize = 24
+	Close.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Close.TextTransparency = 0.5
+	Close.TextSize = 20
 	Close.Parent = Background
 	KeySystem.UI.Close = Close
 
 	Submit.MouseButton1Click:Connect(KeySystem.Functions.SubmitKey)
 
 	GetKey.MouseButton1Click:Connect(function()
-		KeySystem.Functions.CopyLink(KeySystem.Config.KeyLink, GetKey)
+		KeySystem.Functions.CopyLink(KeySystem.Config.LinkvertiseLink, GetKey)
+	end)
+
+	WorkInk.MouseButton1Click:Connect(function()
+		KeySystem.Functions.CopyLink(KeySystem.Config.WorkInkLink, WorkInk)
 	end)
 
 	Discord.MouseButton1Click:Connect(function()
@@ -451,37 +611,51 @@ function KeySystem.Functions.CreateGui()
 
 	Submit.MouseEnter:Connect(function()
 		KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(90, 105, 255),
+			BackgroundColor3 = Color3.fromRGB(255, 20, 147),
+			TextColor3 = Color3.fromRGB(255, 255, 255),
 		}):Play()
 	end)
 
 	Submit.MouseLeave:Connect(function()
 		KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(75, 90, 255),
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			TextColor3 = Color3.fromRGB(15, 15, 15),
 		}):Play()
 	end)
 
 	GetKey.MouseEnter:Connect(function()
 		KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(38, 38, 46),
+			BackgroundColor3 = Color3.fromRGB(35, 35, 35),
 		}):Play()
 	end)
 
 	GetKey.MouseLeave:Connect(function()
 		KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(28, 28, 34),
+			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
+		}):Play()
+	end)
+
+	WorkInk.MouseEnter:Connect(function()
+		KeySystem.Services.TweenService:Create(WorkInk, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+		}):Play()
+	end)
+
+	WorkInk.MouseLeave:Connect(function()
+		KeySystem.Services.TweenService:Create(WorkInk, TweenInfo.new(0.12), {
+			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
 		}):Play()
 	end)
 
 	Discord.MouseEnter:Connect(function()
 		KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(38, 38, 46),
+			BackgroundColor3 = Color3.fromRGB(35, 35, 35),
 		}):Play()
 	end)
 
 	Discord.MouseLeave:Connect(function()
 		KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(28, 28, 34),
+			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
 		}):Play()
 	end)
 
@@ -489,13 +663,15 @@ function KeySystem.Functions.CreateGui()
 
 	Close.MouseEnter:Connect(function()
 		KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
-			TextColor3 = Color3.fromRGB(255, 100, 100),
+			TextColor3 = Color3.fromRGB(255, 50, 50),
+			TextTransparency = 0,
 		}):Play()
 	end)
 
 	Close.MouseLeave:Connect(function()
 		KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
-			TextColor3 = Color3.fromRGB(170, 170, 180),
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextTransparency = 0.5,
 		}):Play()
 	end)
 end
