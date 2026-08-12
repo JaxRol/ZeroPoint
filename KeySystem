@@ -1,3 +1,4 @@
+
 repeat task.wait() until game:IsLoaded()
 local Header = "https://api.luarmor.net/files/v4/loaders/"
 local KeySystem = {
@@ -681,6 +682,21 @@ function KeySystem.Functions.Start()
 
 	if not GameData then
 		warn("[Zero Point] This game is not supported.")
+		return
+	end
+
+	local ProvidedKey = KeySystem.Functions.CleanKey(script_key)
+
+	if ProvidedKey ~= "" then
+		script_key = ProvidedKey
+		KeySystem.Functions.SaveKey(ProvidedKey)
+
+		local Loaded, LoadError = KeySystem.Functions.LoadGameScript()
+
+		if not Loaded then
+			warn("[Zero Point] Failed to load script:", LoadError)
+		end
+
 		return
 	end
 
