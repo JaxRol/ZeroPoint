@@ -11573,7 +11573,7 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
 
     WindowGroup:AddToggle("UISettingsWindowGlow", {
         Text = "Window Glow",
-        Default = Library.Scheme.WindowGlow,
+        Default = false,
         Callback = function(Value)
             Library:SetGlow(Value)
         end,
