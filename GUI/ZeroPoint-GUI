@@ -1,4 +1,5 @@
 
+
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -279,7 +280,7 @@ local Templates = {
         AutoShow = true,
         Center = true,
         Resizable = true,
-        Glow = true,
+        Glow = false,
         BackgroundImageEnabled = false,
         BackgroundImage = "",
         SearchbarSize = UDim2.fromScale(1, 1),
@@ -11573,7 +11574,7 @@ function Library:LoadSettingsTab(Window, SettingsInfo)
 
     WindowGroup:AddToggle("UISettingsWindowGlow", {
         Text = "Window Glow",
-        Default = false,
+        Default = Library.Scheme.WindowGlow,
         Callback = function(Value)
             Library:SetGlow(Value)
         end,
