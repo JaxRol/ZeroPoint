@@ -1,5 +1,3 @@
-
-
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -280,7 +278,7 @@ local Templates = {
         AutoShow = true,
         Center = true,
         Resizable = true,
-        Glow = false,
+        Glow = true,
         BackgroundImageEnabled = false,
         BackgroundImage = "",
         SearchbarSize = UDim2.fromScale(1, 1),
@@ -6807,13 +6805,29 @@ function Library:SetGradientAnimation(State: boolean)
 end
 function Library:CreateWindow(WindowInfo)
     WindowInfo = Library:Validate(WindowInfo, Templates.Window)
-    local ViewportSize: Vector2 = workspace.CurrentCamera.ViewportSize
-    if RunService:IsStudio() and ViewportSize.X <= 5 and ViewportSize.Y <= 5 then
-        repeat
-            ViewportSize = workspace.CurrentCamera.ViewportSize
-            task.wait()
-        until ViewportSize.X > 5 and ViewportSize.Y > 5
+
+    local CurrentCamera = workspace.CurrentCamera
+
+    while not CurrentCamera do
+        workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+        CurrentCamera = workspace.CurrentCamera
     end
+
+    local ViewportSize: Vector2 = CurrentCamera.ViewportSize
+    local ViewportAttempts = 0
+
+    while (ViewportSize.X <= 5 or ViewportSize.Y <= 5) and ViewportAttempts < 120 do
+        RunService.RenderStepped:Wait()
+
+        CurrentCamera = workspace.CurrentCamera or CurrentCamera
+        ViewportSize = CurrentCamera.ViewportSize
+        ViewportAttempts += 1
+    end
+
+    if ViewportSize.X <= 5 or ViewportSize.Y <= 5 then
+        ViewportSize = Vector2.new(800, 600)
+    end
+
     local MaxX = ViewportSize.X - 64
     local MaxY = ViewportSize.Y - 64
     Library.OriginalMinSize =
@@ -7408,7 +7422,19 @@ function Library:CreateWindow(WindowInfo)
         return Tabs.Size.X.Offset
     end
     function Window:SetSidebarWidth(Width)
-        Width = math.clamp(Width, 48, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
+        Width = tonumber(Width) or WindowInfo.SidebarCompactWidth
+
+        local MinWidth = 48
+        local FrameWidth = MainFrame.Size.X.Offset
+
+        if FrameWidth <= 0 then
+            FrameWidth = MainFrame.AbsoluteSize.X
+        end
+
+        local MaxWidth = FrameWidth - WindowInfo.MinContainerWidth - 1
+        MaxWidth = math.max(MinWidth, MaxWidth)
+        Width = math.clamp(Width, MinWidth, MaxWidth)
+
         DividerLine.Position = UDim2.fromOffset(Width, 0)
         TitleHolder.Size = UDim2.new(0, Width, 1, 0)
         RightWrapper.Size = UDim2.new(1, -Width - 57 - 1, 1, -16)
