@@ -1189,11 +1189,19 @@ function Library:Validate(Table: { [string]: any }, Template: { [string]: any })
     end
     return Table
 end
-local function FillInstance(Table: { [string]: any }, Instance: GuiObject)
-    local ThemeProperties = Library.Registry[Instance] or {}
+local ApplyGuiContentLayer
+
+local function FillInstance(Table: { [string]: any }, Object: Instance)
+    local ThemeProperties = Library.Registry[Object] or {}
+
     for key, value in Table do
+        if key == "Parent" then
+            continue
+        end
+
         if key ~= "Text" then
             local SchemeValue = GetSchemeValue(value)
+
             if SchemeValue or typeof(value) == "function" then
                 ThemeProperties[key] = value
                 value = SchemeValue or value()
@@ -1201,24 +1209,40 @@ local function FillInstance(Table: { [string]: any }, Instance: GuiObject)
                 ThemeProperties[key] = nil
             end
         end
-        Instance[key] = value
+
+        Object[key] = value
     end
+
     if GetTableSize(ThemeProperties) > 0 then
-        Library.Registry[Instance] = ThemeProperties
+        Library.Registry[Object] = ThemeProperties
     end
 end
+
 local function New(ClassName: string, Properties: { [string]: any }): any
-    local Instance = Instance.new(ClassName)
+    local Object = Instance.new(ClassName)
+    local Parent = Properties.Parent
+
     if Templates[ClassName] then
-        FillInstance(Templates[ClassName], Instance)
+        FillInstance(Templates[ClassName], Object)
     end
-    FillInstance(Properties, Instance)
-    if Properties["Parent"] and not Properties["ZIndex"] then
+
+    FillInstance(Properties, Object)
+
+    if Parent and Properties.ZIndex == nil then
         pcall(function()
-            Instance.ZIndex = Properties.Parent.ZIndex
+            Object.ZIndex = Parent.ZIndex
         end)
     end
-    return Instance
+
+    if ApplyGuiContentLayer then
+        pcall(ApplyGuiContentLayer, Object, Parent, Properties)
+    end
+
+    if Parent then
+        Object.Parent = Parent
+    end
+
+    return Object
 end
 local function SafeParentUI(Instance: Instance, Parent: Instance | () -> Instance)
     local success, _error = pcall(function()
@@ -6916,37 +6940,27 @@ function Library:CreateWindow(WindowInfo)
         table.insert(Library.Corners, GuiEffectCorner)
         EffectSystem.Targets.Gui.Layer = GuiEffectLayer
 
-        local function KeepGuiContentAboveEffects(Instance)
-            if not Instance:IsA("GuiObject") then
+        ApplyGuiContentLayer = function(Object, Parent, Properties)
+            if not Parent or not Object:IsA("GuiObject") then
                 return
             end
 
-            if Instance:GetAttribute("ZeroPointVisualLayer")
-                or Instance == GuiEffectLayer
-                or Instance:IsDescendantOf(GuiEffectLayer)
-            then
+            if Parent == GuiEffectLayer or Parent:IsDescendantOf(GuiEffectLayer) then
                 return
             end
 
-            if Instance:GetAttribute("ZeroPointBackgroundHost") then
-                Instance.ZIndex = 1
+            if Parent ~= MainFrame and not Parent:IsDescendantOf(MainFrame) then
                 return
             end
 
-            if Instance.ZIndex < 5 then
-                Instance.ZIndex = 5
+            if Parent == MainFrame and Properties.ZIndex ~= nil then
+                return
+            end
+
+            if Object.ZIndex < 5 then
+                Object.ZIndex = 5
             end
         end
-
-        Library:GiveSignal(MainFrame.DescendantAdded:Connect(function(Instance)
-            task.defer(function()
-                if Library.Unloaded or not Instance.Parent then
-                    return
-                end
-
-                KeepGuiContentAboveEffects(Instance)
-            end)
-        end))
 
         table.insert(
             Library.Corners,
