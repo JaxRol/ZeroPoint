@@ -28,6 +28,11 @@ local KeySystem = {
 				Loader = Header .."5d076bba1ac1e607d227124d1b0f3756.lua",
 				FFA = false,
 			},
+            [10563114921] = {
+				ScriptId = "43d45138f4d1cff63bff62032e1a19d5",
+				Loader = Header .."43d45138f4d1cff63bff62032e1a19d5.lua",
+				FFA = false,
+			},
 		},
 	},
 
