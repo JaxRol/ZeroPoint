@@ -21,7 +21,7 @@ local KeySystem = {
 			[66654135] = {
 				ScriptId = "060693a42eb51e4037baa82f218c5915",
 				Loader = Header .."060693a42eb51e4037baa82f218c5915.lua",
-				FFA = false,
+				FFA = true,
 			},
 			[10539411000] = {
 				ScriptId = "5d076bba1ac1e607d227124d1b0f3756",
