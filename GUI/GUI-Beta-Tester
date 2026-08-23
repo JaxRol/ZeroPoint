@@ -1,3 +1,4 @@
+
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -91,35 +92,23 @@ do
             Path = string.format("Obsidian/custom_assets/%s", AssetName),
             URL = URL,
             Id = nil,
-            Downloading = false,
         }
-        if ForceRedownload == true then
-            task.defer(function()
-                CustomImageManager.DownloadAsset(AssetName, true)
-            end)
-        end
+        CustomImageManager.DownloadAsset(AssetName, ForceRedownload)
     end
     function CustomImageManager.GetAsset(AssetName: string)
-        local AssetData = CustomImageManagerAssets[AssetName]
-        if not AssetData then
+        if not CustomImageManagerAssets[AssetName] then
             return nil
         end
+        local AssetData = CustomImageManagerAssets[AssetName]
         if AssetData.Id then
             return AssetData.Id
         end
         local AssetID = string.format("rbxassetid://%s", AssetData.RobloxId)
-        if getcustomasset and isfile and isfile(AssetData.Path) then
+        if getcustomasset then
             local Success, NewID = pcall(getcustomasset, AssetData.Path)
             if Success and NewID then
                 AssetID = NewID
             end
-        elseif not AssetData.Downloading and getcustomasset and writefile and isfile then
-            AssetData.Downloading = true
-            task.defer(function()
-                CustomImageManager.DownloadAsset(AssetName)
-                AssetData.Downloading = false
-                AssetData.Id = nil
-            end)
         end
         AssetData.Id = AssetID
         return AssetID
@@ -129,20 +118,17 @@ do
             return false, "missing functions"
         end
         local AssetData = CustomImageManagerAssets[AssetName]
-        if not AssetData then
-            return false, "unknown asset"
-        end
         RecursiveCreatePath(AssetData.Path, true)
         if ForceRedownload ~= true and isfile(AssetData.Path) then
             return true, nil
         end
-        local Success, ErrorMessage = pcall(function()
+        local success, errorMessage = pcall(function()
             writefile(AssetData.Path, game:HttpGet(AssetData.URL))
         end)
-        if Success then
-            AssetData.Id = nil
-        end
-        return Success, ErrorMessage
+        return success, errorMessage
+    end
+    for AssetName, _ in CustomImageManagerAssets do
+        CustomImageManager.DownloadAsset(AssetName)
     end
 end
 local Library = {
@@ -1106,39 +1092,47 @@ type IconModule = {
     Icons: { string },
     GetAsset: (Name: string) -> Icon?,
 }
-local IconModuleURL = "https://gitlab.com/upio/lucide-roblox-direct/-/raw/main/source.lua"
-local IconModuleCachePath = "Obsidian/cache/lucide-roblox-direct.lua"
-local function GetIconModuleSource()
-    if readfile and isfile and isfile(IconModuleCachePath) then
-        local Success, Source = pcall(readfile, IconModuleCachePath)
-        if Success and typeof(Source) == "string" and #Source > 0 then
-            return Source
-        end
-    end
-    local Source = game:HttpGet(IconModuleURL)
-    if writefile and isfolder and makefolder then
-        pcall(function()
-            RecursiveCreatePath(IconModuleCachePath, true)
-            writefile(IconModuleCachePath, Source)
-        end)
-    end
-    return Source
-end
 local FetchIcons, Icons = pcall(function()
-    local Loader = loadstring(GetIconModuleSource())
-    if typeof(Loader) ~= "function" then
-        return nil
-    end
-    return Loader()
+	local Source = game:HttpGet(
+		"https://gitlab.com/upio/lucide-roblox-direct/-/raw/main/source.lua"
+	)
+
+	local Loader = loadstring(Source)
+
+	if typeof(Loader) ~= "function" then
+		return nil
+	end
+
+	return Loader()
 end)
-FetchIcons = FetchIcons and typeof(Icons) == "table" and typeof(Icons.GetAsset) == "function"
+
+FetchIcons =
+	FetchIcons
+	and typeof(Icons) == "table"
+	and typeof(Icons.GetAsset) == "function"
+
 function Library:GetIcon(IconName: string)
-    if not FetchIcons or typeof(IconName) ~= "string" then
-        return nil
+	if not FetchIcons or typeof(IconName) ~= "string" then
+		return nil
+	end
+
+	local Success, Icon = pcall(function()
+		return Icons.GetAsset(IconName)
+	end)
+
+	if not Success or typeof(Icon) ~= "table" then
+		return nil
+	end
+
+	return Icon
+end
+function Library:GetIcon(IconName: string)
+    if not FetchIcons then
+        return
     end
     local Success, Icon = pcall(Icons.GetAsset, IconName)
-    if not Success or typeof(Icon) ~= "table" then
-        return nil
+    if not Success then
+        return
     end
     return Icon
 end
@@ -5447,19 +5441,24 @@ do
             end
             return Button
         end
-        local Buttons = {}
+        local MultiControlsCreated = false
+        local MultiPadding
+        local MultiButtonHolder
         function Dropdown:BuildDropdownList()
             local Values = Dropdown.Values
             local DisabledValues = Dropdown.DisabledValues
             for Button, _ in Buttons do
-                Button.Parent:Destroy()
+                if Button and Button.Parent then
+                    Button.Parent:Destroy()
+                end
             end
             table.clear(Buttons)
-            if Info.Multi then
+            if Info.Multi and not MultiControlsCreated then
+                MultiControlsCreated = true
                 self:AddButton("Select All", function()
                     local Selected = {}
-                    for _, Value in Values do
-                        if not table.find(DisabledValues, Value) then
+                    for _, Value in Dropdown.Values do
+                        if not table.find(Dropdown.DisabledValues, Value) then
                             Selected[Value] = true
                         end
                     end
@@ -5471,21 +5470,26 @@ do
             MenuTable.Menu.UIListLayout.Padding = UDim.new(0, Info.Multi and 4 or 0)
             local ButtonHolder
             if Info.Multi then
-                New("UIPadding", {
-                    PaddingTop = UDim.new(0, 4),
-                    Parent = MenuTable.Menu,
-                })
-                ButtonHolder = New("Frame", {
-                    AutomaticSize = Enum.AutomaticSize.Y,
-                    BackgroundTransparency = 1,
-                    LayoutOrder = Info.Multi and 1 or 0,
-                    Size = UDim2.fromScale(1, 1),
-                    Parent = MenuTable.Menu,
-                })
-                New("UIListLayout", {
-                    Padding = UDim.new(0, 0),
-                    Parent = ButtonHolder,
-                })
+                if not MultiPadding or not MultiPadding.Parent then
+                    MultiPadding = New("UIPadding", {
+                        PaddingTop = UDim.new(0, 4),
+                        Parent = MenuTable.Menu,
+                    })
+                end
+                if not MultiButtonHolder or not MultiButtonHolder.Parent then
+                    MultiButtonHolder = New("Frame", {
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        BackgroundTransparency = 1,
+                        LayoutOrder = 1,
+                        Size = UDim2.fromScale(1, 1),
+                        Parent = MenuTable.Menu,
+                    })
+                    New("UIListLayout", {
+                        Padding = UDim.new(0, 0),
+                        Parent = MultiButtonHolder,
+                    })
+                end
+                ButtonHolder = MultiButtonHolder
             end
             local Count = 0
             for _, Value in Values do
