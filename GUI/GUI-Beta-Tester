@@ -1,4 +1,5 @@
 
+
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -2477,6 +2478,7 @@ function Library:AddContextMenu(
         Signal = nil,
         SizeSignal = nil,
         ViewportSignal = nil,
+        ScrollSignals = {},
         Size = Size,
     }
     if List then
@@ -2526,6 +2528,15 @@ function Library:AddContextMenu(
         Table.Signal = Holder:GetPropertyChangedSignal("AbsolutePosition"):Connect(Table.UpdatePosition)
         Table.SizeSignal = Menu:GetPropertyChangedSignal("AbsoluteSize"):Connect(Table.UpdatePosition)
         Table.ViewportSignal = ParentGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(Table.UpdatePosition)
+        local Ancestor = Holder.Parent
+        while Ancestor and Ancestor ~= ParentGui do
+            if Ancestor:IsA("ScrollingFrame") then
+                table.insert(Table.ScrollSignals, Ancestor:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+                    Table:Close()
+                end))
+            end
+            Ancestor = Ancestor.Parent
+        end
     end
     function Table:Close()
         if CurrentMenu ~= Table then
@@ -2543,6 +2554,12 @@ function Library:AddContextMenu(
         if Table.ViewportSignal then
             Table.ViewportSignal:Disconnect()
             Table.ViewportSignal = nil
+        end
+        for Index = #Table.ScrollSignals, 1, -1 do
+            local Signal = table.remove(Table.ScrollSignals, Index)
+            if Signal and Signal.Connected then
+                Signal:Disconnect()
+            end
         end
         Table.Active = false
         CurrentMenu = nil
@@ -4721,7 +4738,10 @@ do
             Size = UDim2.new(1, 0, 0, 21),
             Text = Input.Value,
             TextEditable = not Input.Disabled,
-            TextScaled = true,
+            TextScaled = false,
+            TextSize = 14,
+            TextWrapped = false,
+            MultiLine = false,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = Holder,
         })
@@ -8455,23 +8475,24 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
                 ToggleButton = New("TextButton", {
-                    AnchorPoint = Vector2.new(1, 0),
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -8, 0, 8),
-                    Size = UDim2.fromOffset(20, 20),
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.new(1, 0, 0, 34),
                     Text = "",
                     ZIndex = 5,
                     Parent = GroupboxHolder,
                 })
-                GroupboxArrow = New("ImageButton", {
+                GroupboxArrow = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(1, 0.5),
                     BackgroundTransparency = 1,
-                    Size = UDim2.fromScale(1, 1),
+                    Position = UDim2.new(1, -8, 0.5, 0),
+                    Size = UDim2.fromOffset(20, 20),
                     Image = ArrowIcon and ArrowIcon.Url or "",
                     ImageColor3 = "WhiteColor",
                     ImageRectOffset = ArrowIcon and ArrowIcon.ImageRectOffset or Vector2.zero,
                     ImageRectSize = ArrowIcon and ArrowIcon.ImageRectSize or Vector2.zero,
                     Rotation = 180,
-                    ZIndex = 4,
+                    ZIndex = 6,
                     Parent = ToggleButton,
                 })
                 GroupboxContainer = New("Frame", {
@@ -9259,23 +9280,24 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
                 ToggleButton = New("TextButton", {
-                    AnchorPoint = Vector2.new(1, 0),
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -8, 0, 8),
-                    Size = UDim2.fromOffset(20, 20),
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.new(1, 0, 0, 34),
                     Text = "",
                     ZIndex = 5,
                     Parent = GroupboxHolder,
                 })
-                GroupboxArrow = New("ImageButton", {
+                GroupboxArrow = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(1, 0.5),
                     BackgroundTransparency = 1,
-                    Size = UDim2.fromScale(1, 1),
+                    Position = UDim2.new(1, -8, 0.5, 0),
+                    Size = UDim2.fromOffset(20, 20),
                     Image = ArrowIcon and ArrowIcon.Url or "",
                     ImageColor3 = "WhiteColor",
                     ImageRectOffset = ArrowIcon and ArrowIcon.ImageRectOffset or Vector2.zero,
                     ImageRectSize = ArrowIcon and ArrowIcon.ImageRectSize or Vector2.zero,
                     Rotation = 180,
-                    ZIndex = 4,
+                    ZIndex = 6,
                     Parent = ToggleButton,
                 })
                 GroupboxContainer = New("Frame", {
