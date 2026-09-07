@@ -1,5 +1,3 @@
-
-
 local cloneref = (cloneref or clonereference or function(instance: any)
     return instance
 end)
@@ -5028,52 +5026,73 @@ do
             Slider.Suffix = Suffix
             Slider:Display()
         end
+        local SliderDragging = false
+        local SliderDragInput = nil
+
+        local function SetSliderScrollingEnabled(Enabled: boolean)
+            if Library.ActiveTab then
+                if Library.ActiveTab.Sides then
+                    for _, Side in Library.ActiveTab.Sides do
+                        Side.ScrollingEnabled = Enabled
+                    end
+                else
+                    Library.ActiveTab.Container.ScrollingEnabled = Enabled
+                end
+            end
+            if Library.ActiveLoading and Library.ActiveLoading.Sidebar then
+                Library.ActiveLoading.Sidebar.Container.ScrollingEnabled = Enabled
+            end
+        end
+
+        local function UpdateSliderFromX(X: number)
+            if Slider.Disabled or Bar.AbsoluteSize.X <= 0 then
+                return
+            end
+            local Scale = math.clamp((X - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
+            Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * Scale))
+        end
+
         Bar.InputBegan:Connect(function(Input: InputObject)
             if not IsClickInput(Input) or Slider.Disabled then
                 return
             end
-            if Library.ActiveTab then
-                if Library.ActiveTab.Sides then
-                    for _, Side in Library.ActiveTab.Sides do
-                        Side.ScrollingEnabled = false
-                    end
-                else
-                    Library.ActiveTab.Container.ScrollingEnabled = false
-                end
-            end
-            if Library.ActiveLoading and Library.ActiveLoading.Sidebar then
-                Library.ActiveLoading.Sidebar.Container.ScrollingEnabled = false
-            end
-            while IsDragInput(Input) do
-                local Location = Mouse.X
-                local Scale = math.clamp((Location - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
-                local OldValue = Slider.Value
-                Slider.Value = Round(
-					Slider.Min + ((Slider.Max - Slider.Min) * Scale),
-					Slider.Rounding,
-					Slider.Min,
-					Slider.Max
-				)
-                Slider:Display()
-                if Slider.Value ~= OldValue then
-                    Library:SafeCallback(Slider.Callback, Slider.Value)
-                    Library:SafeCallback(Slider.Changed, Slider.Value)
-                end
-                RunService.RenderStepped:Wait()
-            end
-            if Library.ActiveTab then
-                if Library.ActiveTab.Sides then
-                    for _, Side in Library.ActiveTab.Sides do
-                        Side.ScrollingEnabled = true
-                    end
-                else
-                    Library.ActiveTab.Container.ScrollingEnabled = true
-                end
-            end
-            if Library.ActiveLoading and Library.ActiveLoading.Sidebar then
-                Library.ActiveLoading.Sidebar.Container.ScrollingEnabled = true
-            end
+            SliderDragging = true
+            SliderDragInput = Input
+            SetSliderScrollingEnabled(false)
+            UpdateSliderFromX(Input.UserInputType == Enum.UserInputType.Touch and Input.Position.X or Mouse.X)
         end)
+
+        Library:GiveSignal(UserInputService.InputChanged:Connect(function(Input: InputObject)
+            if not SliderDragging or Slider.Disabled or not SliderDragInput then
+                return
+            end
+
+            if SliderDragInput.UserInputType == Enum.UserInputType.Touch then
+                if Input == SliderDragInput then
+                    UpdateSliderFromX(Input.Position.X)
+                end
+            elseif Input.UserInputType == Enum.UserInputType.MouseMovement then
+                UpdateSliderFromX(Input.Position.X)
+            end
+        end))
+
+        Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
+            if not SliderDragging or not SliderDragInput then
+                return
+            end
+
+            local Ended = Input == SliderDragInput
+                or (SliderDragInput.UserInputType == Enum.UserInputType.MouseButton1
+                    and Input.UserInputType == Enum.UserInputType.MouseButton1)
+
+            if not Ended then
+                return
+            end
+
+            SliderDragging = false
+            SliderDragInput = nil
+            SetSliderScrollingEnabled(true)
+        end))
         if typeof(Slider.Tooltip) == "string" or typeof(Slider.DisabledTooltip) == "string" then
             Slider.TooltipTable = Library:AddTooltip(Slider.Tooltip, Slider.DisabledTooltip, Bar)
             Slider.TooltipTable.Disabled = Slider.Disabled
