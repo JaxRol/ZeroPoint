@@ -28,7 +28,7 @@ local KeySystem = {
                 FFA = false,
             },
             [7326934954] = {
-                FFA = true,
+                FFA = false,
             },
             [383310974] = {
                 FFA = true,
