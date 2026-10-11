@@ -36,6 +36,9 @@ local KeySystem = {
             [10035204815] = {
                 FFA = true,
             },
+            [994732206] = {
+                FFA = true,
+            },
         },
     },
     State = {
