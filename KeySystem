@@ -45,6 +45,8 @@ local KeySystem = {
         Busy = false,
         SavedKey = nil,
         SavedKeyMessage = nil,
+        LastErrorDetails = nil,
+        LastErrorStage = nil,
     },
     UI = {},
     Functions = {},
@@ -155,13 +157,29 @@ end
 
 function KeySystem.Functions.SetStatus(Message, IsError)
     if KeySystem.UI.ScreenGui and KeySystem.UI.Status then
-        KeySystem.UI.Status.Text = Message
+        KeySystem.UI.Status.Text = tostring(Message or "")
         KeySystem.UI.Status.TextColor3 = IsError and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(127, 127, 127)
+    end
+    if KeySystem.UI.CopyError then
+        KeySystem.UI.CopyError.Visible = IsError == true and type(KeySystem.State.LastErrorDetails) == "string"
     end
 end
 
-function KeySystem.Functions.GetErrorMessage(Error)
-    local Message = tostring(Error)
+function KeySystem.Functions.RedactError(Message, Credential)
+    Message = tostring(Message or "No error details were returned.")
+    local Keys = {Credential, KeySystem.State.SavedKey}
+    for _, Key in next, Keys do
+        if type(Key) == "string" and Key ~= "" then
+            local Pattern = Key:gsub("(%W)", "%%%1")
+            Message = Message:gsub(Pattern, "[key redacted]")
+        end
+    end
+    return Message
+end
+
+function KeySystem.Functions.GetErrorMessage(Error, Stage)
+    local Message = tostring(Error or "No details")
+    local Lower = Message:lower()
     local Errors = {
         {"invalid_key", "Invalid key or wrong FlowAuth project."},
         {"key_revoked", "This key has been revoked."},
@@ -173,17 +191,35 @@ function KeySystem.Functions.GetErrorMessage(Error)
         {"key_required", "Enter a FlowAuth project key."},
         {"no_script_for_game", "No published FlowAuth script matches this game."},
         {"instance_limit_reached", "This key has reached its active execution limit."},
-        {"incompatible_executor", "Update your executor; FlowAuth requires compatible functions."},
+        {"incompatible_executor", "FlowAuth rejected the executor's capabilities."},
         {"payload_too_large", "The protected script is too large. Contact support."},
         {"nonce_reused", "The loader session expired. Try again."},
         {"challenge_rejected", "The loader session was rejected. Try again."},
     }
     for _, Entry in next, Errors do
-        if Message:find(Entry[1], 1, true) then
+        if Lower:find(Entry[1], 1, true) then
             return Entry[2]
         end
     end
-    return "FlowAuth could not finish loading. Check your executor console."
+    local FirstLine = Message:match("[^\r\n]+") or "No error details were returned"
+    FirstLine = FirstLine:gsub("^%s+", ""):gsub("%s+$", "")
+    if #FirstLine > 145 then FirstLine = FirstLine:sub(1, 142) .. "..." end
+    return tostring(Stage or "Loader") .. " failed: " .. FirstLine
+end
+
+function KeySystem.Functions.CopyErrorDetails()
+    local Details = KeySystem.State.LastErrorDetails
+    if type(Details) ~= "string" or Details == "" then return end
+    if type(setclipboard) ~= "function" then
+        KeySystem.Functions.SetStatus("Clipboard is unsupported. See executor console.", true)
+        return
+    end
+    local Success = pcall(setclipboard, Details)
+    if Success then
+        KeySystem.Functions.SetStatus("Error details copied. Paste to inspect the failure.", true)
+    else
+        KeySystem.Functions.SetStatus("Could not copy details. See executor console.", true)
+    end
 end
 
 function KeySystem.Functions.LoadGameScript(Key)
@@ -195,39 +231,53 @@ function KeySystem.Functions.LoadGameScript(Key)
     if Key == "" and not GameData.FFA then
         return false, "Enter a FlowAuth project key."
     end
+
     local Credential = Key ~= "" and Key or nil
     local Environment = type(getgenv) == "function" and getgenv() or _G
-    local Success, Error = pcall(function()
+    local Stage = "Download"
+    KeySystem.State.LastErrorDetails = nil
+    KeySystem.State.LastErrorStage = nil
+
+    local Success, LoaderResult, LoaderMessage = pcall(function()
+        Stage = "Download"
         local Source = game:HttpGet(GameData.Loader or KeySystem.Config.Loader)
         if type(Source) ~= "string" or Source == "" then
             error("Empty FlowAuth loader response.", 0)
         end
+        Stage = "Compile"
         local Loader, CompileError = loadstring(Source)
         if type(Loader) ~= "function" then
             error(CompileError or "Invalid FlowAuth loader response.", 0)
         end
+        Stage = "Execute"
         script_key = Credential
         Environment.script_key = Credential
         _G.script_key = Credential
-        Loader(Credential)
+        return Loader(Credential)
     end)
-    if script_key == Credential then
-        script_key = nil
+
+    if Credential ~= nil then
+        if script_key == Credential then script_key = nil end
+        if Environment.script_key == Credential then Environment.script_key = nil end
+        if _G.script_key == Credential then _G.script_key = nil end
     end
-    if Environment.script_key == Credential then
-        Environment.script_key = nil
-    end
-    if _G.script_key == Credential then
-        _G.script_key = nil
-    end
+
+    local Details
     if not Success then
-        local Details = tostring(Error)
-        if Credential then
-            local Pattern = Credential:gsub("(%W)", "%%%1")
-            Details = Details:gsub(Pattern, "[redacted]")
-        end
-        warn("[Zero Point] FlowAuth loader error: " .. Details)
-        return false, KeySystem.Functions.GetErrorMessage(Error)
+        Details = LoaderResult
+    elseif LoaderResult == false then
+        Details = LoaderMessage or "The FlowAuth loader returned false without providing a reason."
+    elseif type(LoaderResult) == "table" and (LoaderResult.success == false or LoaderResult.ok == false) then
+        Details = LoaderResult.error or LoaderResult.message or "The FlowAuth loader reported a failure."
+    end
+
+    if Details ~= nil then
+        local CleanDetails = KeySystem.Functions.RedactError(Details, Credential)
+        local Diagnostic = "[Zero Point Key System] " .. Stage .. " failed: " .. CleanDetails
+        KeySystem.State.LastErrorDetails = Diagnostic
+        KeySystem.State.LastErrorStage = Stage
+        warn(Diagnostic)
+        return false, KeySystem.Functions.GetErrorMessage(CleanDetails, Stage)
     end
     return true
 end
@@ -647,7 +697,7 @@ function KeySystem.Functions.CreateGui()
     Status.Name = "Status"
     Status.BackgroundTransparency = 1
     Status.Position = UDim2.fromOffset(171, 258)
-    Status.Size = UDim2.new(1, -187, 0, 36)
+    Status.Size = UDim2.fromOffset(247, 48)
     Status.TextWrapped = true
     Status.TextYAlignment = Enum.TextYAlignment.Top
     Status.Font = Enum.Font.GothamBlack
@@ -657,6 +707,24 @@ function KeySystem.Functions.CreateGui()
     Status.TextXAlignment = Enum.TextXAlignment.Left
     Status.Parent = Background
     KeySystem.UI.Status = Status
+
+    local CopyError = Instance.new("TextButton")
+    CopyError.Name = "CopyError"
+    CopyError.Position = UDim2.fromOffset(426, 263)
+    CopyError.Size = UDim2.fromOffset(77, 30)
+    CopyError.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    CopyError.BorderSizePixel = 0
+    CopyError.Font = Enum.Font.GothamBold
+    CopyError.Text = "Copy Error"
+    CopyError.TextSize = 11
+    CopyError.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CopyError.Visible = type(KeySystem.State.LastErrorDetails) == "string"
+    CopyError.Parent = Background
+    local CopyErrorCorner = Instance.new("UICorner")
+    CopyErrorCorner.CornerRadius = UDim.new(0, 4)
+    CopyErrorCorner.Parent = CopyError
+    CopyError.MouseButton1Click:Connect(KeySystem.Functions.CopyErrorDetails)
+    KeySystem.UI.CopyError = CopyError
 
     local Close = Instance.new("TextButton")
     Close.Name = "Close"
