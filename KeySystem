@@ -1,3 +1,13 @@
+local function CopyUnexpectedError(Error)
+    local Raw = tostring(Error)
+    if type(setclipboard) == "function" then
+        pcall(setclipboard, Raw)
+    end
+    warn("[Zero Point Key System] " .. Raw)
+    return Raw
+end
+
+xpcall(function()
 repeat task.wait() until game:IsLoaded()
 getgenv().ScriptBloxReporter = "proj_761cfae4482a"
 
@@ -148,11 +158,11 @@ function KeySystem.Functions.CopyLink(Link, Button)
     local OriginalText = Button.Text
     setclipboard(Link)
     Button.Text = "Link Copied"
-    task.delay(1.5, function()
+    task.delay(1.5, KeySystem.Functions.Guard(function()
         if Button and Button.Parent then
             Button.Text = OriginalText
         end
-    end)
+    end))
 end
 
 function KeySystem.Functions.SetStatus(Message, IsError)
@@ -207,6 +217,33 @@ function KeySystem.Functions.GetErrorMessage(Error, Stage)
     return tostring(Stage or "Loader") .. " failed: " .. FirstLine
 end
 
+function KeySystem.Functions.ReportError(Error, Stage, Credential)
+    local Raw = tostring(Error)
+    KeySystem.State.LastErrorDetails = Raw
+    KeySystem.State.LastErrorStage = Stage
+    if type(setclipboard) == "function" then
+        pcall(setclipboard, Raw)
+    end
+    warn("[Zero Point Key System] " .. tostring(Stage or "Runtime") .. " failed: " .. KeySystem.Functions.RedactError(Raw, Credential))
+    return Raw
+end
+
+function KeySystem.Functions.Guard(Callback)
+    return function(...)
+        local Success, Result = xpcall(Callback, function(Error)
+            return KeySystem.Functions.ReportError(Error, "Callback")
+        end, ...)
+        if Success then
+            return Result
+        end
+        KeySystem.State.Busy = false
+        if KeySystem.UI.ScreenGui and KeySystem.UI.ScreenGui.Parent then
+            KeySystem.UI.ScreenGui.Enabled = true
+            KeySystem.Functions.SetStatus(KeySystem.Functions.GetErrorMessage(Result, "Callback"), true)
+        end
+    end
+end
+
 function KeySystem.Functions.CopyErrorDetails()
     local Details = KeySystem.State.LastErrorDetails
     if type(Details) ~= "string" or Details == "" then return end
@@ -225,11 +262,11 @@ end
 function KeySystem.Functions.LoadGameScript(Key)
     local GameData = KeySystem.Functions.GetGameData()
     if not GameData then
-        return false, "This game is not supported."
+        return false, KeySystem.Functions.ReportError("This game is not supported.", "Validation")
     end
     Key = KeySystem.Functions.CleanKey(Key)
     if Key == "" and not GameData.FFA then
-        return false, "Enter a FlowAuth project key."
+        return false, KeySystem.Functions.ReportError("Enter a FlowAuth project key.", "Validation")
     end
 
     local Credential = Key ~= "" and Key or nil
@@ -272,12 +309,8 @@ function KeySystem.Functions.LoadGameScript(Key)
     end
 
     if Details ~= nil then
-        local CleanDetails = KeySystem.Functions.RedactError(Details, Credential)
-        local Diagnostic = "[Zero Point Key System] " .. Stage .. " failed: " .. CleanDetails
-        KeySystem.State.LastErrorDetails = Diagnostic
-        KeySystem.State.LastErrorStage = Stage
-        warn(Diagnostic)
-        return false, KeySystem.Functions.GetErrorMessage(CleanDetails, Stage)
+        local Raw = KeySystem.Functions.ReportError(Details, Stage, Credential)
+        return false, KeySystem.Functions.GetErrorMessage(KeySystem.Functions.RedactError(Raw, Credential), Stage)
     end
     return true
 end
@@ -288,6 +321,7 @@ function KeySystem.Functions.Launch(Key)
     end
     Key = KeySystem.Functions.CleanKey(Key)
     if Key == "" and not KeySystem.Functions.IsFreeScript() then
+        KeySystem.Functions.ReportError("Please enter a FlowAuth key.", "Validation")
         KeySystem.Functions.SetStatus("Please enter a FlowAuth key.", true)
         return
     end
@@ -339,31 +373,31 @@ function KeySystem.Functions.MakeDraggable(Object, Handle)
 
     Handle.Active = true
 
-    Handle.InputBegan:Connect(function(Input)
+    Handle.InputBegan:Connect(KeySystem.Functions.Guard(function(Input)
         if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
             Dragging = true
             DragStart = Input.Position
             StartPosition = Object.Position
 
-            Input.Changed:Connect(function()
+            Input.Changed:Connect(KeySystem.Functions.Guard(function()
                 if Input.UserInputState == Enum.UserInputState.End then
                     Dragging = false
                 end
-            end)
+            end))
         end
-    end)
+    end))
 
-    Handle.InputChanged:Connect(function(Input)
+    Handle.InputChanged:Connect(KeySystem.Functions.Guard(function(Input)
         if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
             DragInput = Input
         end
-    end)
+    end))
 
-    UserInputService.InputChanged:Connect(function(Input)
+    UserInputService.InputChanged:Connect(KeySystem.Functions.Guard(function(Input)
         if Dragging and Input == DragInput then
             Update(Input)
         end
-    end)
+    end))
 end
 
 function KeySystem.Functions.CreateGui()
@@ -723,7 +757,7 @@ function KeySystem.Functions.CreateGui()
     local CopyErrorCorner = Instance.new("UICorner")
     CopyErrorCorner.CornerRadius = UDim.new(0, 4)
     CopyErrorCorner.Parent = CopyError
-    CopyError.MouseButton1Click:Connect(KeySystem.Functions.CopyErrorDetails)
+    CopyError.MouseButton1Click:Connect(KeySystem.Functions.Guard(KeySystem.Functions.CopyErrorDetails))
     KeySystem.UI.CopyError = CopyError
 
     local Close = Instance.new("TextButton")
@@ -740,114 +774,114 @@ function KeySystem.Functions.CreateGui()
     Close.Parent = Background
     KeySystem.UI.Close = Close
 
-    Submit.MouseButton1Click:Connect(KeySystem.Functions.SubmitKey)
+    Submit.MouseButton1Click:Connect(KeySystem.Functions.Guard(KeySystem.Functions.SubmitKey))
 
-    GetKey.MouseButton1Click:Connect(function()
+    GetKey.MouseButton1Click:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Functions.CopyLink(KeySystem.Config.LinkvertiseLink, GetKey)
-    end)
+    end))
 
-    WorkInk.MouseButton1Click:Connect(function()
+    WorkInk.MouseButton1Click:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Functions.CopyLink(KeySystem.Config.WorkInkLink, WorkInk)
-    end)
+    end))
 
-    LootLabs.MouseButton1Click:Connect(function()
+    LootLabs.MouseButton1Click:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Functions.CopyLink(KeySystem.Config.LootLabsLink, LootLabs)
-    end)
+    end))
 
-    Discord.MouseButton1Click:Connect(function()
+    Discord.MouseButton1Click:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Functions.CopyLink(KeySystem.Config.DiscordInvite, Discord)
-    end)
+    end))
 
-    KeyBox.FocusLost:Connect(function(EnterPressed)
+    KeyBox.FocusLost:Connect(KeySystem.Functions.Guard(function(EnterPressed)
         if EnterPressed then
             KeySystem.Functions.SubmitKey()
         end
-    end)
+    end))
 
-    Submit.MouseEnter:Connect(function()
+    Submit.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(255, 20, 147),
             TextColor3 = Color3.fromRGB(255, 255, 255),
         }):Play()
-    end)
+    end))
 
-    Submit.MouseLeave:Connect(function()
+    Submit.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Submit, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(255, 255, 255),
             TextColor3 = Color3.fromRGB(15, 15, 15),
         }):Play()
-    end)
+    end))
 
-    GetKey.MouseEnter:Connect(function()
+    GetKey.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(35, 35, 35),
         }):Play()
-    end)
+    end))
 
-    GetKey.MouseLeave:Connect(function()
+    GetKey.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(GetKey, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         }):Play()
-    end)
+    end))
 
-    WorkInk.MouseEnter:Connect(function()
+    WorkInk.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(WorkInk, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(35, 35, 35),
         }):Play()
-    end)
+    end))
 
-    WorkInk.MouseLeave:Connect(function()
+    WorkInk.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(WorkInk, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         }):Play()
-    end)
+    end))
 
-    LootLabs.MouseEnter:Connect(function()
+    LootLabs.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(LootLabs, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(35, 35, 35),
         }):Play()
-    end)
+    end))
 
-    LootLabs.MouseLeave:Connect(function()
+    LootLabs.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(LootLabs, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         }):Play()
-    end)
+    end))
 
-    Discord.MouseEnter:Connect(function()
+    Discord.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(35, 35, 35),
         }):Play()
-    end)
+    end))
 
-    Discord.MouseLeave:Connect(function()
+    Discord.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Discord, TweenInfo.new(0.12), {
             BackgroundColor3 = Color3.fromRGB(25, 25, 25),
         }):Play()
-    end)
+    end))
 
-    Close.MouseButton1Click:Connect(KeySystem.Functions.Destroy)
+    Close.MouseButton1Click:Connect(KeySystem.Functions.Guard(KeySystem.Functions.Destroy))
 
-    Close.MouseEnter:Connect(function()
+    Close.MouseEnter:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
             TextColor3 = Color3.fromRGB(255, 50, 50),
             TextTransparency = 0,
         }):Play()
-    end)
+    end))
 
-    Close.MouseLeave:Connect(function()
+    Close.MouseLeave:Connect(KeySystem.Functions.Guard(function()
         KeySystem.Services.TweenService:Create(Close, TweenInfo.new(0.12), {
             TextColor3 = Color3.fromRGB(255, 255, 255),
             TextTransparency = 0.5,
         }):Play()
-    end)
+    end))
 end
 
 function KeySystem.Functions.Start()
     local GameData = KeySystem.Functions.GetGameData()
 
     if not GameData then
-        warn("[Zero Point] This game is not supported.")
+        KeySystem.Functions.ReportError("This game is not supported.", "Validation")
         return
     end
 
@@ -886,3 +920,5 @@ KeySystem.Functions.Start()
 pcall(function()
     loadstring(game:HttpGet("https://scriptblox.com/ingest/client.lua"))()
 end)
+
+end, CopyUnexpectedError)
