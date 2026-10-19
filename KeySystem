@@ -20,6 +20,7 @@ local KeySystem = {
     },
     Config = {
         Name = "ZeroPointKeySystem",
+        KeylessRetryDelay = 3,
         Folder = "ZeroPoint",
         KeyFile = "ZeroPoint/FlowAuthKey.txt",
         Loader = "https://flowauth.net/v1/loaders/d898da8eb28122b7dfaf89b20f926d54.lua",
@@ -882,6 +883,39 @@ function KeySystem.Functions.Start()
 
     if not GameData then
         KeySystem.Functions.ReportError("This game is not supported.", "Validation")
+        return
+    end
+
+    if GameData.FFA == true then
+        -- Keyless games never create or reopen the authentication GUI.
+        KeySystem.Functions.Destroy()
+        local GuiParent = KeySystem.Functions.GetGuiParent()
+        local ExistingGui = GuiParent:FindFirstChild(KeySystem.Config.Name)
+        if ExistingGui then
+            ExistingGui:Destroy()
+        end
+
+        local Environment = type(getgenv) == "function" and getgenv() or _G
+        local RetryToken = {}
+        Environment.ZeroPointKeylessRetryToken = RetryToken
+
+        task.spawn(function()
+            local Attempt = 0
+            while Environment.ZeroPointKeylessRetryToken == RetryToken do
+                Attempt += 1
+                local Success, ErrorMessage = KeySystem.Functions.LoadGameScript(nil)
+                if Success then
+                    if Environment.ZeroPointKeylessRetryToken == RetryToken then
+                        Environment.ZeroPointKeylessRetryToken = nil
+                    end
+                    return
+                end
+
+                warn(("[Zero Point] Keyless load attempt %d failed: %s. Retrying in %s seconds.")
+                    :format(Attempt, tostring(ErrorMessage), tostring(KeySystem.Config.KeylessRetryDelay)))
+                task.wait(KeySystem.Config.KeylessRetryDelay)
+            end
+        end)
         return
     end
 
