@@ -30,7 +30,7 @@ local KeySystem = {
         DiscordInvite = "https://discord.gg/Nk44e68bmn",
         Games = {
             [66654135] = {
-                FFA = false,-- MM2
+                FFA = true,-- MM2
             },
             [10539411000] = {
                 FFA = false,
