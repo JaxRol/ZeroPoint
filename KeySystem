@@ -56,6 +56,9 @@ local KeySystem = {
             [88070565] = {
                 FFA = true,
             }, 
+            [372226183] = { --Flee the Facility
+                FFA = true,
+            }, 
         },
     },
     State = {
